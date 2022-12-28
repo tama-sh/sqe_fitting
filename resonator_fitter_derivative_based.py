@@ -45,8 +45,8 @@ class resonator_fitter(fitter_base):
         
         ## init param name
         self.p_dict = [('freq_center', Unit('xx')),
-                       ('k_ex', Unit('xx')),
-                       ('k_in', Unit('xx')),
+                       ('k_ex/2pi', Unit('xx')),
+                       ('k_in/2pi', Unit('xx')),
                        ('amplitude', Unit('yy')),
                        ('phase', Unit('rad')),
                        ('electrical_delay', Unit('rad/xx'))]
