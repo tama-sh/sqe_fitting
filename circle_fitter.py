@@ -136,9 +136,18 @@ def algebric_circle_fit(x: np.ndarray, y: np.ndarray, init_method="Pratt"):
                   ('B', p_init[1]/p_init[0]),
                   ('C', p_init[2]/p_init[0]),
                   ('D', p_init[3]/p_init[0]))
+    pars.add('x_c', expr='-B/(2*A)')
+    pars.add('y_c', expr='-C/(2*A)'),
+    pars.add('r_0', expr='(1/(2*abs(A)))*sqrt(B**2+C**2-4*A*D)')
     
     fitter = lmfit.Minimizer(residual, pars, fcn_args=(x, y))
     rst = fitter.minimize()
+    
+    # Best fit
+    # x_c, y_c, r_0 = rst.params['x_c'], rst.params['y_c'], rst.params['r_0']
+    # theta = np.arange(0, 2*np.pi, 2*np.pi/100)
+    # rst.best_fit = x_c+r_0*np.cos(theta) + 1j*(y_c+r_0*np.sin(theta))
+    
     return rst
 
 def ABCD_to_center_radius(A: float, B: float, C: float, D: float):
