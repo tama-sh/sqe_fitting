@@ -1,5 +1,6 @@
 import numpy as np
 import scipy.signal as scisig
+from .util import percentile_range_data
 
 def smoothen(data: np.ndarray, t = 1, numtaps: int = 21, smoothing_width: float = 10):
     """Smoothen the data by applying fir filter with zero phase.
@@ -63,3 +64,47 @@ def group_delay(cplx: np.ndarray, omega: np.ndarray):
         np.ndarray: group delay at the middle points of give array of omega ,the length of array become len(cplx)-1
     """
     return -np.imag(derivative(cplx, omega)/middle_points(cplx))
+
+def find_peaks(data, x=1., height=None, distance=None, prominence=None, **kwargs):
+    """Find peaks from data, wrapper function of scipy.signal.find_peaks
+    Return values are same as scipy.signal.find_peaks
+    
+    Args:
+        data (np.ndarray): Data with peaks
+        x (np.ndarray): x-axis of data
+        height (float): Threshold of height in the unit of standard deviation of baseline noise (e.g. height=10 means that peak larger than 10\sigma from baseline would be detected)
+        distance (float): Minimum distance between the peaks, distance in the same unit of frequency
+        kwargs: other key-word arguments to be passed to scipy.signal.find_peaks
+    Returns:
+        peaks (np.ndarray): peak indices
+        properties (dict): properties of peaks
+    """
+    baseline_data = percentile_range_data(data, (0, 0.5)) # baseline estimation by using 0-0.5 percentile of data
+    mu = np.mean(baseline_data)
+    sigma = np.sqrt(np.mean(baseline_data**2)-mu**2)
+    
+    if height is None:
+        height_scipy = None
+    elif isinstance(height, (float, int)) or isinstance(height, np.ndarray):
+        height_scipy = mu + height*sigma
+    else:
+        height_scipy = [mu + h*sigma for h in height]
+        
+    if prominence is None:
+        prominence_scipy = None
+    elif isinstance(height, (float, int)) or isinstance(prominence, np.ndarray):
+        prominence_scipy = prominence*sigma
+    else:
+        prominence_scipy = [p*sigma for p in prominence]
+        
+    if isinstance(x, np.ndarray):
+        dx = x[1] - x[0]
+    elif isinstance(x, (float, int)):
+        dx = x
+    else:
+        raise ValueError('x should be either np.ndarray or float')
+    distance_scipy = max(1, int(distance/dx))
+    
+    kwargs.update({'height': height_scipy, 'distance': distance_scipy, 'prominence': prominence_scipy})
+    peaks, properties = scisig.find_peaks(data, **kwargs)
+    return peaks, properties
