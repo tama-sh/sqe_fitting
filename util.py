@@ -13,8 +13,8 @@ def percentile_range_indices(data: np.ndarray, percentile_rage: Tuple[float, flo
     """
     l = len(data)
     sort_idxs = np.argsort(data)
-    idx_s = int(np.round(l*r_s))
-    idx_e = int(np.round(l*r_e))
+    idx_s = int(np.round(l*percentile_rage[0]))
+    idx_e = int(np.round(l*percentile_rage[1]))
     
     idx_range = np.arange(idx_s, idx_e, 1)
     return sort_idxs[idx_range]
@@ -29,4 +29,4 @@ def percentile_range_data(data: np.ndarray, percentile_rage: Tuple[float, float]
     Return:
         np.array: sorted data in the given range of percentile
     """
-    return data[percentile_range_indices(data, r_s, r_e)]
+    return data[percentile_range_indices(data, percentile_rage)]
