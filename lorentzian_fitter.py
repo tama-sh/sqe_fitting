@@ -23,10 +23,10 @@ class lorentzian_fitter(object):
         # # use guess function of LorentzianModel
         # params = self.model.left.guess(data-c_init, x=x, negative=self.negative, **kwargs)
 
-        sigma = guess_linewidth_from_peak(x, data)
+        sigma = guess_linewidth_from_peak(x, data_peak)
         idx_c = np.argmax(data_peak)
         mu = x[idx_c]
-        A = np.pi*sigma*data_peak[idx_c]
+        A = np.pi*sigma*data[idx_c]
         
         params = self.model.make_params()
         params['amplitude'].set(value=A)
