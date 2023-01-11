@@ -120,7 +120,7 @@ class ResonatorReflectionModel(lmfit.model.Model):
         
         omega_0 = mu
         kappa_tot = 2*sigma
-        kappa_ex = self.reflection_factor*amp*sigma/(np.pi*a)
+        kappa_ex = amp*sigma/(np.pi*a)/self.reflection_factor
         kappa_in = max(0, kappa_tot-kappa_ex)
 
         # estimate phase and tilt
