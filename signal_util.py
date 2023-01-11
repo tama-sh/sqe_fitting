@@ -12,8 +12,9 @@ def smoothen(data: np.ndarray, dt: float = 1, numtaps: int = 21, smoothing_width
     Returns:
         np.ndarray: smoothened data
     """
+    fs = 1/dt
     cutoff = 1/smoothing_width
-    b = scisig.firwin(numtaps=21, cutoff=cutoff, fs=dt)
+    b = scisig.firwin(numtaps=21, cutoff=cutoff, fs=fs)
     data_lp = scisig.filtfilt(b, 1, data) # apply zero phase filter
     return data_lp
 
