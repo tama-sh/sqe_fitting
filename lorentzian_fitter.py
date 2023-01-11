@@ -9,7 +9,7 @@ class lorentzian_fitter(object):
         self.model = LorentzianModel() + ConstantModel()
         self.negative = negative
     
-    def guess(self, x, data, **kwargs):
+    def guess(self, data, x, **kwargs):
         if self.negative is None:
             negative = not guess_peak_or_dip(data)
             
@@ -36,9 +36,9 @@ class lorentzian_fitter(object):
         
         return params
     
-    def fit(self, x, data, params=None, **kwargs):
+    def fit(self, data, x, params=None, **kwargs):
         if params is None:
-            params = self.guess(x, data)
+            params = self.guess(data, x)
         return self.model.fit(data, params, x=x, **kwargs)
 
 def guess_peak_or_dip(data):

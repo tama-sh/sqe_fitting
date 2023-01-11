@@ -8,7 +8,7 @@ class decay_fitter(object):
         self.model = ExponentialModel() + ConstantModel()
         self.negative = negative
     
-    def guess(self, x, data, **kwargs):
+    def guess(self, data, x, **kwargs):
         if self.negative:
             c_init = max(data)
         else:
@@ -18,8 +18,8 @@ class decay_fitter(object):
         params.add('c', value=c_init)
         return params
     
-    def fit(self, x, data, params=None, **kwargs):
+    def fit(self, data, x, params=None, **kwargs):
         if params is None:
-            params = self.guess(x, data)
+            params = self.guess(data, x)
         return self.model.fit(data, params, x=x, **kwargs)
     

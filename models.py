@@ -112,7 +112,7 @@ class ResonatorReflectionModel(lmfit.model.Model):
         s_lorentz = np.abs(derivative(cplx_lp, omega)) # this derivative should be Lorentzian if electrical delay is well calibrated
 
         fitter_lorentz = lorentzian_fitter()
-        rst = fitter_lorentz.fit(omega_mid, s_lorentz)
+        rst = fitter_lorentz.fit(s_lorentz, omega_mid)
 
         amp = rst.params['amplitude'].value
         mu = rst.params['center'].value

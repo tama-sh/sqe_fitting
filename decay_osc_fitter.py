@@ -7,7 +7,7 @@ class decay_osc_fitter(object):
     def __init__(self):
         self.model = DampedOscillationModel() + ConstantModel()
     
-    def guess(self, x, data, **kwargs):
+    def guess(self, data, x, **kwargs):
         c_init = np.mean(percentile_range_data(data, (0.25, 0.75)))
         
         # make parameters
@@ -15,7 +15,7 @@ class decay_osc_fitter(object):
         params.add('c', value=c_init)
         return params
     
-    def fit(self, x, data, params=None, **kwargs):
+    def fit(self, data, x, params=None, **kwargs):
         if params is None:
-            params = self.guess(x, data)
+            params = self.guess(data, x)
         return self.model.fit(data, params, x=x, **kwargs)
