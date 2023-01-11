@@ -1,17 +1,24 @@
 import numpy as np
 import scipy.signal as scisig
 
-def smoothen(data: np.ndarray, dt: float = 1, numtaps: int = 21, smoothing_width: float = 10):
+def smoothen(data: np.ndarray, t = 1, numtaps: int = 21, smoothing_width: float = 10):
     """Smoothen the data by applying fir filter with zero phase.
     Args:
         data (np.ndarray): data to be smoothened
-        dt (float): interval of sampling
+        t (float): sampling time or interval of sampling
         numtaps (int): number of taps used for fir filter
         smoothing_width (float): time width of smoothing, cutoff = 1/smoothing_width
         
     Returns:
         np.ndarray: smoothened data
     """
+    if isinstance(t, np.ndarray):
+        dt = t[1] - t[0]
+    elif isinstance(t, (float, int)):
+        dt = t
+    else:
+        raise ValueError('t should be either np.ndarray or float')
+    
     fs = 1/dt
     cutoff = 1/smoothing_width
     b = scisig.firwin(numtaps=21, cutoff=cutoff, fs=fs)
