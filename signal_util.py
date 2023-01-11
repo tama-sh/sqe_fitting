@@ -43,14 +43,14 @@ def middle_points(x: np.ndarray):
     """
     return 0.5*(x[1:]+x[:-1])
 
-def group_delay(omega: np.ndarray, cplx: np.ndarray):
+def group_delay(cplx: np.ndarray, omega: np.ndarray):
     """Calculate group delay
     
     Use derivative of cplx instead of unwrapped phase for stability
     
     Args:
-        omega (np.ndarray): angular frequency
         cplx (np.ndarray): complex data with electrical delay
+        omega (np.ndarray): angular frequency
         
     Returns:
         np.ndarray: group delay at the middle points of give array of omega ,the length of array become len(cplx)-1
