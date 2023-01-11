@@ -108,3 +108,22 @@ def find_peaks(data, x=1., height=None, distance=None, prominence=None, **kwargs
     kwargs.update({'height': height_scipy, 'distance': distance_scipy, 'prominence': prominence_scipy})
     peaks, properties = scisig.find_peaks(data, **kwargs)
     return peaks, properties
+
+def find_major_axis(cplx: np.ndarray):
+    """Find major axis from complex data
+    
+    Find major axis from complex data and return the angle indicating the direction of major axis
+    
+    Args:
+        cplx (np.ndarray(complex)): IQ data as complex number
+        
+    Return:
+        theta: angle of the major axis
+        
+    """
+    X = np.stack((cplx.real, cplx.imag), axis=0)
+    cov = np.cov(X, bias=0)
+    eigval, eigvec = np.linalg.eig(cov)
+    idx = np.argmin(eigval)
+    theta = np.arctan2(eigvec[idx, 0], eigvec[idx, 1])
+    return theta
