@@ -45,7 +45,7 @@ def estimate_electrical_delay_unwrap(omega: np.ndarray, cplx: np.ndarray, accumu
     electrical_delay = -(phase[-1]-phase[0]-accumulated_phase)/(omega[-1]-omega[0])
     return electrical_delay
 
-def estimate_electrical_delay_from_group_delay(omega: np.ndarray, cplx: np.ndarray, percentile_range: Tuple[float, float] = (0, 0.5), with_smoothing=True):
+def estimate_electrical_delay_from_group_delay(omega: np.ndarray, cplx: np.ndarray, percentile_range: Tuple[float, float] = (0, 0.5)):
     """Estimate electridal delay from the group delay
     
     Args:
@@ -56,8 +56,6 @@ def estimate_electrical_delay_from_group_delay(omega: np.ndarray, cplx: np.ndarr
     Returns:
         float: electrical delay
     """
-    if with_smoothing:
-        cplx = smoothen(cplx)
     delay = group_delay(omega, cplx)
     return np.mean(percentile_range_data(delay, percentile_range))
 
@@ -117,5 +115,5 @@ def estimate_electrical_delay_resonator(omega: np.ndarray, cplx: np.ndarray):
         float: electrical delay
     """
     
-    electrical_delay_init = estimate_electrical_delay_from_group_delay(omega, cplx)
+    electrical_delay_init = estimate_electrical_delay_from_group_delay(omega, smoothen(cplx))
     return estimate_electrical_delay_circle_fit(omega, cplx, electrical_delay_init=electrical_delay_init)
