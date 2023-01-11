@@ -1,14 +1,14 @@
 import numpy as np
 from lmfit.models import ConstantModel
 from .models import DampedOscillationModel
-from .util import percentile_range_indices
+from .util import percentile_range_data
 
 class decay_osc_fitter(object):
     def __init__(self):
         self.model = DampedOscillationModel() + ConstantModel()
     
     def guess(self, x, data, **kwargs):
-        c_init = np.mean(data[percentile_range_indices(data, 0.25, 0.75)])
+        c_init = np.mean(percentile_range_data(data, (0.25, 0.75)))
         
         # make parameters
         params = self.model.left.guess(data-c_init, x=x)

@@ -59,7 +59,7 @@ def estimate_electrical_delay_from_group_delay(omega: np.ndarray, cplx: np.ndarr
     if with_smoothing:
         cplx = smoothen(cplx)
     delay = group_delay(omega, cplx)
-    return np.mean(percentile_range_data(delay, *percentile_range))
+    return np.mean(percentile_range_data(delay, percentile_range))
 
 def estimate_electrical_delay_circle_fit(omega: np.ndarray, cplx: np.ndarray, electrical_delay_init=0, return_minimizer_result=False):
     """Estimate electridal delay from algebric circle fit

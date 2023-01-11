@@ -1,12 +1,12 @@
+from typing import Tuple
 import numpy as np
 
-def percentile_range_indices(data: np.ndarray, r_s: float, r_e: float):
+def percentile_range_indices(data: np.ndarray, percentile_rage: Tuple[float, float]):
     """Return indices of 1d array in a range of percentile 
     
     Args:
         data (np.ndarray): data
-        r_s (float): ratio of data extracted from (0 to 1)
-        r_e (float): ratio of data extracted to (0 to 1), must be greater than r_s
+        percentile_range: range of percentile to be extracted (from 0 to 1)
         
     Return:
         np.array: indices of array with the data of the given range of percentile
@@ -19,13 +19,12 @@ def percentile_range_indices(data: np.ndarray, r_s: float, r_e: float):
     idx_range = np.arange(idx_s, idx_e, 1)
     return sort_idxs[idx_range]
 
-def percentile_range_data(data: np.ndarray, r_s: float, r_e: float):
+def percentile_range_data(data: np.ndarray, percentile_rage: Tuple[float, float]):
     """Return indices of 1d array in a range of percentile 
     
     Args:
         data (np.ndarray): data
-        r_s (float): ratio of data extracted from (0 to 1)
-        r_e (float): ratio of data extracted to (0 to 1), must be greater than r_s
+        percentile_range: range of percentile to be extracted (from 0 to 1)
         
     Return:
         np.array: sorted data in the given range of percentile
