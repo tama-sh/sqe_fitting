@@ -98,8 +98,8 @@ class ResonatorReflectionModel(lmfit.model.Model):
 
         # estimate electrical delay
         if not fix_electrical_delay:
-            electrical_delay = estimate_electrical_delay_resonator(omega, cplx)
-            cplx_c = correct_electrical_delay(omega, cplx, electrical_delay)
+            electrical_delay = estimate_electrical_delay_resonator(cplx, omega)
+            cplx_c = correct_electrical_delay(cplx, omega, electrical_delay)
         else:
             cplx_c = cplx
 
