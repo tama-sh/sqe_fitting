@@ -2,7 +2,7 @@ from typing import Tuple
 import matplotlib.pyplot as plt
 import numpy as np
 
-def plot_Sparameter(freq: np.ndarray, cplx: np.ndarray, frequency_unit: str = None, title: str = None, figsize: Tuple[float, float] = (12, 6), fig=None, axes=None, color=None):
+def plot_Sparameter(freq: np.ndarray, cplx: np.ndarray, frequency_unit: str = None, title: str = None, figsize: Tuple[float, float] = (12, 6), fig=None, color=None):
     """Plot S parameter
     
     Args:
@@ -20,11 +20,10 @@ def plot_Sparameter(freq: np.ndarray, cplx: np.ndarray, frequency_unit: str = No
         List[matplotlib.axes.Axes]: list of axes
     """
     
-    if axes is None:
-        if fig is None:
-            fig = plt.figure(figsize=figsize)
-            fig.tight_layout()
-            fig.suptitle(title)
+    if fig is None:
+        fig = plt.figure(figsize=figsize)
+        fig.tight_layout()
+        fig.suptitle(title)
 
         ax_amp = fig.add_subplot(221)
         ax_ph = fig.add_subplot(223)
@@ -33,7 +32,7 @@ def plot_Sparameter(freq: np.ndarray, cplx: np.ndarray, frequency_unit: str = No
         if frequency_unit:
             freq_label = f"Frequency ({frequency_unit})"
         else:
-            freq_lqbel = "Frequency"
+            freq_label = "Frequency"
     
         ax_amp.set_xlabel(freq_label)
         ax_amp.set_ylabel("Amplitude")
@@ -43,9 +42,9 @@ def plot_Sparameter(freq: np.ndarray, cplx: np.ndarray, frequency_unit: str = No
         ax_ph.set_ylabel("Phase (rad)")
         ax_ph.grid(1)
     else:
-        ax_amp = axes[0]
-        ax_ph = axes[1]
-        ax_polar = axes[2]
+        ax_amp = fig.axes[0]
+        ax_ph = fig.axes[1]
+        ax_polar = fig.axes[2]
 
     cmap = plt.get_cmap('tab10')
     if color is None:
@@ -57,5 +56,4 @@ def plot_Sparameter(freq: np.ndarray, cplx: np.ndarray, frequency_unit: str = No
     ax_ph.plot(freq, np.angle(cplx), "o", color=color, fillstyle="none", markersize=5)
     ax_polar.plot(np.angle(cplx), np.abs(cplx), "o", color=color, fillstyle="none", markersize=5)
      
-    axes = [ax_amp, ax_ph, ax_polar]
-    return fig, axes
+    return fig
