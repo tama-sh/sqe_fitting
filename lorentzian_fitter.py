@@ -61,12 +61,13 @@ def guess_linewidth_from_peak(freq, data, r=2):
         Return:
             float: sigma (half of FWHM)
     """
+    length = len(data)
+    idx_c = np.argmax(data[1:-1]) + 1 # avoid the peak placing at borders
+    
     ptp = np.ptp(data)
-    idx_c = np.argmax(data)
     max_val = data[idx_c]
     cond = data > (max_val - ptp/r)
 
-    length = len(data)
     i = 0
     while (idx_c+i+1 < (length-1) and cond[idx_c+i+1]):
         i += 1
