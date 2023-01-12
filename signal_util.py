@@ -65,7 +65,7 @@ def group_delay(cplx: np.ndarray, omega: np.ndarray):
     """
     return -np.imag(derivative(cplx, omega)/middle_points(cplx))
 
-def find_peaks(data, x=1., height=None, distance=None, prominence=None, **kwargs):
+def find_peaks(data, x=1., height=None, distance=None, prominence=None, width=None, **kwargs):
     """Find peaks from data, wrapper function of scipy.signal.find_peaks
     Return values are same as scipy.signal.find_peaks
     
@@ -103,9 +103,16 @@ def find_peaks(data, x=1., height=None, distance=None, prominence=None, **kwargs
         dx = x
     else:
         raise ValueError('x should be either np.ndarray or float')
-    distance_scipy = max(1, int(distance/dx))
+    if distance is None:
+        distance_scipy = None
+    else:
+        distance_scipy = max(1, int(distance/dx))
+    if width is None:
+        width_scipy = None
+    else:
+        width_scipy = max(1, int(width/dx))
     
-    kwargs.update({'height': height_scipy, 'distance': distance_scipy, 'prominence': prominence_scipy})
+    kwargs.update({'height': height_scipy, 'distance': distance_scipy, 'prominence': prominence_scipy, 'width': width_scipy})
     peaks, properties = scisig.find_peaks(data, **kwargs)
     return peaks, properties
 
