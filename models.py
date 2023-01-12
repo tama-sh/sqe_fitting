@@ -10,7 +10,11 @@ from lmfit.models import (
 from .util import percentile_range_data
 from .signal_util import middle_points, derivative, smoothen
 from .lorentzian_fitter import lorentzian_fitter, guess_linewidth_from_peak
-from .electrical_delay_fitter import estimate_electrical_delay_resonator, correct_electrical_delay
+from .electrical_delay_fitter import (
+    estimate_electrical_delay_resonator,
+    estimate_electrical_delay_unwrap,
+    estimate_electrical_delay_from_group_delay,
+    correct_electrical_delay)
 from .circle_fitter import algebric_circle_fit
 
 
@@ -93,12 +97,21 @@ class ResonatorReflectionModel(lmfit.model.Model):
         self.set_param_hint('a', min=0)
         self.set_param_hint('reflection_factor', value=self.reflection_factor, vary=False)
         
-    def guess(self, cplx, omega, smoothing_width=10, fix_electrical_delay=False, **kwargs):
+    def guess(self, cplx, omega, smoothing_width=10, fix_electrical_delay=True, electrical_delay_estimation="default", **kwargs):
         pars = self.make_params()
-
+        
         # estimate electrical delay
         if not fix_electrical_delay:
-            electrical_delay = estimate_electrical_delay_resonator(cplx, omega)
+            if electrical_delay_estimation == "default":
+                 electrical_delay = estimate_electrical_delay_resonator(cplx, omega)
+            elif electrical_delay_estimation == "group delay":
+                electrical_delay = estimate_electrical_delay_from_group_delay(cplx, omega)
+            elif electrical_delay_estimation == "unwrap":
+                electrical_delay = estimate_electrical_delay_unwrap(cplx, omega, accumulated_phase=-2*np.pi)
+            elif electrical_delay_estimation == "none":
+                electrical_delay = 0
+            else:
+                ValueError(f"Estimation method '{electrical_delay_estimation}' is not supprted")
             cplx_c = correct_electrical_delay(cplx, omega, electrical_delay)
         else:
             cplx_c = cplx

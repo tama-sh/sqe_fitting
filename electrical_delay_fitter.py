@@ -105,7 +105,7 @@ def estimate_electrical_delay_circle_fit(cplx: np.ndarray, omega: np.ndarray, el
 def estimate_electrical_delay_resonator(cplx: np.ndarray, omega: np.ndarray):
     """Estimate electridal delay for resonator data
     
-    Use estimate_electrical_delay_from_group_delay to give an initial guess and use estimate_electrical_delay_circle_fit after that
+    Use estimate_electrical_delay_unwrap to give an initial guess and use estimate_electrical_delay_circle_fit after that
     
     Args:
         cplx (np.ndarray): complex data with electrical delay
@@ -115,5 +115,5 @@ def estimate_electrical_delay_resonator(cplx: np.ndarray, omega: np.ndarray):
         float: electrical delay
     """
     
-    electrical_delay_init = estimate_electrical_delay_from_group_delay(smoothen(cplx), omega)
+    electrical_delay_init = estimate_electrical_delay_unwrap(cplx, omega, accumulated_phase=-2*np.pi)
     return estimate_electrical_delay_circle_fit(cplx, omega, electrical_delay_init=electrical_delay_init)
