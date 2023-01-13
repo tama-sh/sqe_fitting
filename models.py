@@ -8,7 +8,7 @@ from lmfit.models import (
 )
 
 from .util import percentile_range_data
-from .signal_util import middle_points, derivative, smoothen
+from .signal_util import middle_points, derivative, smoothen, find_peaks
 from .lorentzian_fitter import lorentzian_fitter, guess_linewidth_from_peak
 from .electrical_delay_fitter import (
     estimate_electrical_delay_resonator,
@@ -16,6 +16,7 @@ from .electrical_delay_fitter import (
     estimate_electrical_delay_from_group_delay,
     correct_electrical_delay)
 from .circle_fitter import algebric_circle_fit
+import scipy.signal as scisig
 
 
 def damped_oscillation(x, amplitude, decay, frequency, phase):
@@ -91,7 +92,6 @@ class ResonatorReflectionModel(lmfit.model.Model):
         self._set_paramhints_prefix()
     
     def _set_paramhints_prefix(self):
-        self.set_param_hint('omega_0', min=0)
         self.set_param_hint('kappa_ex', min=0)
         self.set_param_hint('kappa_in', min=0)
         self.set_param_hint('a', min=0)
@@ -106,8 +106,10 @@ class ResonatorReflectionModel(lmfit.model.Model):
                  electrical_delay = estimate_electrical_delay_resonator(cplx, omega)
             elif electrical_delay_estimation == "group delay":
                 electrical_delay = estimate_electrical_delay_from_group_delay(cplx, omega)
-            elif electrical_delay_estimation == "unwrap":
+            elif electrical_delay_estimation == "unwrap overcoupled":
                 electrical_delay = estimate_electrical_delay_unwrap(cplx, omega, accumulated_phase=-2*np.pi)
+            elif electrical_delay_estimation == "unwrap undercoupled":
+                electrical_delay = estimate_electrical_delay_unwrap(cplx, omega, accumulated_phase=0)
             elif electrical_delay_estimation == "none":
                 electrical_delay = 0
             else:
@@ -159,4 +161,105 @@ class ResonatorReflectionModel(lmfit.model.Model):
         pars['theta'].set(value=theta)
         
         return update_param_vals(pars, self.prefix, **kwargs)
+
+def double_resonator_reflection(omega, omega_0, kappa_ex_0, kappa_in_0, phi_0, omega_1, kappa_ex_1, kappa_in_1, phi_1, a, tau, theta, reflection_factor=1):
+    return a*np.exp(1j*(theta-omega*tau))*(1-(reflection_factor*2*kappa_ex_0*np.exp(1j*phi_0))/(kappa_ex_0+kappa_in_0+2j*(omega-omega_0))
+                                            -(reflection_factor*2*kappa_ex_1*np.exp(1j*phi_1))/(kappa_ex_1+kappa_in_1+2j*(omega-omega_1)))
+
+class DoubleResonatorReflectionModel(lmfit.model.Model):
+    def __init__(self, independent_vars=['omega'], prefix='', nan_policy='raise', reflection_type='normal', **kwargs):
+        kwargs.update({'prefix': prefix, 'nan_policy': nan_policy,
+                       'independent_vars': independent_vars})
+        if reflection_type == 'normal':
+            self.reflection_type = reflection_type
+            self.reflection_factor = 1
+        elif reflection_type == 'hanger':
+            self.reflection_type = reflection_type
+            self.reflection_factor = 0.5
+        else:
+            ValueError(f"Reflection type '{reflection_type}' is not supprted")
+        super().__init__(double_resonator_reflection, **kwargs)
+        self._set_paramhints_prefix()
     
+    def _set_paramhints_prefix(self):
+        self.set_param_hint('kappa_ex_0', min=0)
+        self.set_param_hint('kappa_in_0', min=0)
+        self.set_param_hint('kappa_ex_1', min=0)
+        self.set_param_hint('kappa_in_1', min=0)
+        self.set_param_hint('a', min=0)
+        self.set_param_hint('reflection_factor', value=self.reflection_factor, vary=False)
+        
+    def guess(self, cplx, omega, smoothing_width=10, fix_electrical_delay=True, **kwargs):
+        pars = self.make_params()
+        
+        electrical_delay = estimate_electrical_delay_unwrap(cplx, omega, accumulated_phase=-4*np.pi)
+        cplx_c = correct_electrical_delay(cplx, omega, electrical_delay)
+
+        # estimate amplitude baseline
+        a = np.mean(percentile_range_data(abs(cplx_c), (0.75, 1)))
+        
+        # derivative-based guess
+        omega_mid = middle_points(omega)
+        cplx_lp = smoothen(cplx_c, smoothing_width=smoothing_width)
+        s_lorentz = np.abs(derivative(cplx_lp, omega)) # this derivative should be Lorentzian if electrical delay is well calibrated
+        
+        double_lorentzian_model = LorentzianModel(prefix='r0_') + LorentzianModel(prefix='r1_')
+        pars = double_lorentzian_model.make_params()
+        
+        peaks, properties = find_peaks(s_lorentz, omega_mid, height=10, prominence=10)
+        sigmas = 0.5*scisig.peak_widths(s_lorentz, peaks, rel_height=0.5)[0]*(omega_mid[1]-omega_mid[0])
+        heights = properties['peak_heights']
+        
+        if len(peaks) == 2:
+            pars['r0_amplitude'].set(value=heights[0]*(sigmas[0]*np.pi))
+            pars['r1_amplitude'].set(value=heights[1]*(sigmas[1]*np.pi))
+            pars['r0_center'].set(value=omega_mid[peaks[0]]) 
+            pars['r1_center'].set(value=omega_mid[peaks[1]])
+            pars['r0_sigma'].set(value=sigmas[0])
+            pars['r1_sigma'].set(value=sigmas[1])
+        else:
+            pars['r0_amplitude'].set(value=heights[0]*(sigmas[0]*np.pi))
+            pars['r1_amplitude'].set(value=heights[0]*(sigmas[0]*np.pi))
+            pars['r0_center'].set(value=omega_mid[peaks[0]]) 
+            pars['r1_center'].set(value=omega_mid[peaks[0]])
+            pars['r0_sigma'].set(value=sigmas[0])
+            pars['r1_sigma'].set(value=sigmas[0])
+        
+        rst = double_lorentzian_model.fit(s_lorentz, x=omega_mid, params=pars)
+        
+        amp_0 = rst.params['r0_amplitude'].value
+        mu_0 = rst.params['r0_center'].value
+        sigma_0 = rst.params['r0_sigma'].value
+        
+        amp_1 = rst.params['r1_amplitude'].value
+        mu_1 = rst.params['r1_center'].value
+        sigma_1 = rst.params['r1_sigma'].value
+        
+        omega_0 = mu_0
+        kappa_tot_0 = 2*sigma_0
+        kappa_ex_0 = amp_0*sigma_0/(np.pi*a)/self.reflection_factor
+        kappa_in_0 = max(0, kappa_tot_0-kappa_ex_0)
+        omega_1 = mu_1
+        kappa_tot_1 = 2*sigma_1
+        kappa_ex_1 = amp_1*sigma_1/(np.pi*a)/self.reflection_factor
+        kappa_in_1 = max(0, kappa_tot_1-kappa_ex_1)
+        
+        # parepare parameters
+        pars = self.make_params()
+        pars['a'].set(value=a)
+        pars['omega_0'].set(value=omega_0)
+        pars['kappa_ex_0'].set(value=kappa_ex_0)
+        pars['kappa_in_0'].set(value=kappa_in_0)
+        pars['omega_1'].set(value=omega_1)
+        pars['kappa_ex_1'].set(value=kappa_ex_1)
+        pars['kappa_in_1'].set(value=kappa_in_1)   
+        pars['phi_0'].set(value=0)
+        pars['phi_1'].set(value=0)
+        
+        if fix_electrical_delay:
+            pars['tau'].set(value=0, vary=False)
+        else:
+            pars['tau'].set(value=electrical_delay)
+        pars['theta'].set(value=0)
+
+        return update_param_vals(pars, self.prefix, **kwargs)
