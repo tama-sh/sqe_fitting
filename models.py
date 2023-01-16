@@ -49,6 +49,7 @@ class DampedOscillationModel(lmfit.model.Model):
     
     def _set_paramhints_prefix(self):
         self.set_param_hint('amplitude', min=0)
+        self.set_param_hint('frequency', min=0)
         self.set_param_hint('phase', min=-np.pi, max=np.pi)
         
     def guess(self, data, x, **kwargs):
@@ -87,7 +88,7 @@ class ResonatorReflectionModel(lmfit.model.Model):
             self.reflection_type = reflection_type
             self.reflection_factor = 0.5
         else:
-            ValueError(f"Reflection type '{reflection_type}' is not supprted")
+            raise ValueError(f"Reflection type '{reflection_type}' is not supprted")
         super().__init__(resonator_reflection, **kwargs)
         self._set_paramhints_prefix()
     
@@ -97,7 +98,7 @@ class ResonatorReflectionModel(lmfit.model.Model):
         self.set_param_hint('a', min=0)
         self.set_param_hint('reflection_factor', value=self.reflection_factor, vary=False)
         
-    def guess(self, cplx, omega, smoothing_width=10, fix_electrical_delay=True, electrical_delay_estimation="default", **kwargs):
+    def guess(self, cplx, omega, smoothing_width=10, fix_electrical_delay=False, electrical_delay_estimation="default", **kwargs):
         pars = self.make_params()
         
         # estimate electrical delay
@@ -113,7 +114,7 @@ class ResonatorReflectionModel(lmfit.model.Model):
             elif electrical_delay_estimation == "none":
                 electrical_delay = 0
             else:
-                ValueError(f"Estimation method '{electrical_delay_estimation}' is not supprted")
+                raise ValueError(f"Estimation method '{electrical_delay_estimation}' is not supprted")
             cplx_c = correct_electrical_delay(cplx, omega, electrical_delay)
         else:
             cplx_c = cplx
@@ -177,7 +178,7 @@ class DoubleResonatorReflectionModel(lmfit.model.Model):
             self.reflection_type = reflection_type
             self.reflection_factor = 0.5
         else:
-            ValueError(f"Reflection type '{reflection_type}' is not supprted")
+            raise ValueError(f"Reflection type '{reflection_type}' is not supprted")
         super().__init__(double_resonator_reflection, **kwargs)
         self._set_paramhints_prefix()
     
