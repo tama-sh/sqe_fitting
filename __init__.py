@@ -7,12 +7,11 @@ from .electrical_delay_fitter import (
 from .circle_fitter import algebric_circle_fit
 from .models import (
     DampedOscillationModel,
-    ResonatorReflectionModel
-)
-from .composite_models import (
+    ResonatorReflectionModel,
     Lorentzian_plus_ConstantModel,
     Exponential_plus_ConstantModel,
     DampedOscillation_plus_ConstantModel
 )
+
 from .plot_util import plot_Sparameter
 from .signal_util import *
