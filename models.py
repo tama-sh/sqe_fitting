@@ -10,7 +10,7 @@ from lmfit.models import (
 )
 
 from .util import percentile_range_data
-from .signal_util import middle_points, derivative, smoothen, find_peaks
+from .signal_util import middle_points, derivative, smoothen, find_peaks, guess_peak_or_dip, guess_linewidth_from_peak
 from .electrical_delay_fitter import (
     estimate_electrical_delay_resonator,
     estimate_electrical_delay_unwrap,
@@ -18,48 +18,6 @@ from .electrical_delay_fitter import (
     correct_electrical_delay)
 from .circle_fitter import algebric_circle_fit
 import scipy.signal as scisig
-
-
-# Guess utlility
-def guess_peak_or_dip(data):
-    """ Guess data has a peak or a dip
-        Args:
-            data (np.ndarray): data
-        Return:
-            bool: True if data has a peak
-    """
-    return np.median(data) < (np.min(data) + np.ptp(data)/2)
-
-def guess_linewidth_from_peak(freq, data, r=2):
-    """ Estimate line width sigma (half of FWHM) from peak, for LorentzianModel
-    
-        Args:
-            freq (np.ndarray): frequency
-            data (np.ndarray): data with peak of dip (peak, dip is automatically estimated)
-            r (float): Theshold value to estimate the peak. The peak width is estimated from the range of data where data > (1-1/r)*max(data)
-            
-        Return:
-            float: sigma (half of FWHM)
-    """
-    length = len(data)
-    idx_c = np.argmax(data[1:-1]) + 1 # avoid the peak placing at borders
-    
-    ptp = np.ptp(data)
-    max_val = data[idx_c]
-    cond = data > (max_val - ptp/r)
-
-    i = 0
-    while (idx_c+i+1 < (length-1) and cond[idx_c+i+1]):
-        i += 1
-    j = 0
-    while (idx_c-(j+1) > 0 and cond[idx_c-(j+1)]):
-        j += 1
-    idx_l = idx_c - j
-    idx_r = idx_c + i
-    
-    # redefine r parameter
-    r = ptp/(data[idx_c]-0.5*(data[idx_l-1]+data[idx_r+1]))
-    return np.sqrt(r-1)*(freq[idx_r+1] - freq[idx_l-1])/2
 
 # Models
 def damped_oscillation(x, amplitude, decay, frequency, phase):

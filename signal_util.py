@@ -134,3 +134,45 @@ def find_major_axis(cplx: np.ndarray):
     idx = np.argmin(eigval)
     theta = np.arctan2(eigvec[idx, 0], eigvec[idx, 1])
     return theta
+
+# Guess utlility
+def guess_peak_or_dip(data):
+    """ Guess data has a peak or a dip
+        Args:
+            data (np.ndarray): data
+        Return:
+            bool: True if data has a peak
+    """
+    return np.median(data) < (np.min(data) + np.ptp(data)/2)
+
+def guess_linewidth_from_peak(freq, data, r=2):
+    """ Estimate line width sigma (half of FWHM) from peak, for LorentzianModel
+    
+        Args:
+            freq (np.ndarray): frequency
+            data (np.ndarray): data with peak of dip (peak, dip is automatically estimated)
+            r (float): Theshold value to estimate the peak. The peak width is estimated from the range of data where data > (1-1/r)*max(data)
+            
+        Return:
+            float: sigma (half of FWHM)
+    """
+    length = len(data)
+    idx_c = np.argmax(data[1:-1]) + 1 # avoid the peak placing at borders
+    
+    ptp = np.ptp(data)
+    max_val = data[idx_c]
+    cond = data > (max_val - ptp/r)
+
+    i = 0
+    while (idx_c+i+1 < (length-1) and cond[idx_c+i+1]):
+        i += 1
+    j = 0
+    while (idx_c-(j+1) > 0 and cond[idx_c-(j+1)]):
+        j += 1
+    idx_l = idx_c - j
+    idx_r = idx_c + i
+    
+    # redefine r parameter
+    r = ptp/(data[idx_c]-0.5*(data[idx_l-1]+data[idx_r+1]))
+    return np.sqrt(r-1)*(freq[idx_r+1] - freq[idx_l-1])/2
+
