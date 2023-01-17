@@ -80,7 +80,9 @@ def approx_algebric_circle_fit(x: np.ndarray, y: np.ndarray, method="Pratt"):
     Return:
         np.ndarray: [A, B, C, D] parameter of circle expressed with A(x^2+y^2)+Bx+Cy+D=0
     """
-    M_mat = moment_matrix(x, y)
+    norm_factor = np.sqrt(np.mean(x**2+y**2)) # need normalization for convergence of sciopt.newton
+    xn, yn = x/norm_factor, y/norm_factor
+    M_mat = moment_matrix(xn, yn)
     
     # Define Constraint matrix
     if method == "Pratt":
@@ -91,7 +93,7 @@ def approx_algebric_circle_fit(x: np.ndarray, y: np.ndarray, method="Pratt"):
             [-2, 0, 0, 0]
         ])
     elif method == "Taubin":
-        C_mat = Taubin_constraint_matrix(x, y)
+        C_mat = Taubin_constraint_matrix(xn, yn)
     else:
         raise ValueError("method should be 'Pratt' or 'Taubin'")
     
@@ -101,14 +103,14 @@ def approx_algebric_circle_fit(x: np.ndarray, y: np.ndarray, method="Pratt"):
     eta_opt = sciopt.newton(Q, 0)
 
     # Get parameters of circle
-    eigval, eigvec = np.linalg.eig(M_mat - eta_opt*C_mat)  
+    eigval, eigvec = np.linalg.eig(M_mat - eta_opt*C_mat)
     idx = np.argmin(abs(eigval)) # retrieve eigen vector corresponding to 0 eigen value
-    opt_vec = np.ravel(eigvec[:,idx]) # need to retrieve the column vector
-
+    An, Bn, Cn, Dn = np.ravel(eigvec[:,idx]) # need to retrieve the column vector
+    
     # Objective function of Eq.(4.17) in Ref.[2]
     # error = opt_vec @ M_mat @ opt_vec / (B**2+C**2-4*A*D)  # numpy @ operator for matrix multiplication
     
-    return opt_vec
+    return np.array([An, norm_factor*Bn, norm_factor*Cn, norm_factor**2*Dn])
 
 def algebric_circle_fit(x: np.ndarray, y: np.ndarray, init_method="Pratt"):
     """"Gradient-weighted algebraic fit (GRAF) of circle
