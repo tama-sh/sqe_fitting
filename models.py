@@ -65,9 +65,10 @@ class DampedOscillationModel(lmfit.model.Model):
         sigma = guess_linewidth_from_peak(2*np.pi*fft_freq, abs(fft_data)**2) # estimate decay rate from linewidth of fft peak
         
         # estimate parameters
-        amplitude = 2*np.abs(peak_amp)*sigma  # factor 2 because of cos(omega*t) = (1/2)*(exp(omega*t)+exp(-omega*t))
-        phase = np.angle(peak_amp)
+        # amplitude = 2*np.abs(peak_amp)*sigma  # factor 2 because of cos(omega*t) = (1/2)*(exp(omega*t)+exp(-omega*t))
+        amplitude = 0.5*np.ptp(data)
         frequency = peak_freq
+        phase = np.angle(peak_amp*np.exp(-1j*2*np.pi*frequency*x[0]))
         decay = 1/sigma
         
         pars = self.make_params()
