@@ -141,7 +141,7 @@ def guess_peak_or_dip(data):
         Args:
             data (np.ndarray): data
         Return:
-            bool: True if data has a peak
+            bool: True if data looks like having peaks
     """
     return np.median(data) < (np.min(data) + np.ptp(data)/2)
 
