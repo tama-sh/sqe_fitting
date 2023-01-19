@@ -306,13 +306,22 @@ class Exponential_plus_ConstantModel(lmfit.model.CompositeModel):
         kwargs.update({'prefix': prefix, 'nan_policy': nan_policy, 'independent_vars': independent_vars})
         super().__init__(ExponentialModel(**kwargs), ConstantModel(**kwargs), operator.add)
     
-    def guess(self, data, x, negative=False, **kwargs):
+    def guess(self, data, x, negative=None, **kwargs):
+        if negative is None:
+            N = len(data)
+            if np.mean(data[:N//2]) < np.mean(data[N//2:]):
+                negative = True
+            else:
+                negative = False
+            
         if negative:
             c_init = max(data)
+            params = self.left.guess(-(data-c_init), x=x, **kwargs)
+            params['amplitude'].set(value=-params['amplitude'].value)
         else:
             c_init = min(data)
+            params = self.left.guess(data-c_init, x=x, **kwargs)
         
-        params = self.left.guess(data-c_init, x=x, negative=negative, **kwargs)
         params.add('c', value=c_init)
         return params
     
