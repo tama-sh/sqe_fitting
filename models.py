@@ -313,15 +313,20 @@ class Exponential_plus_ConstantModel(lmfit.model.CompositeModel):
                 negative = True
             else:
                 negative = False
-            
+        
+        params = self.left.make_params()
         if negative:
             c_init = max(data)
-            params = self.left.guess(-(data-c_init), x=x, **kwargs)
-            params['amplitude'].set(value=-params['amplitude'].value)
+            factor = -1
         else:
             c_init = min(data)
-            params = self.left.guess(data-c_init, x=x, **kwargs)
-        
+            factor = 1
+        data_exp = factor*(data - c_init)
+        idx = np.where(data_exp < data_exp[0] - 0.5*np.ptp(data_exp))[0][0]
+        decay = x[idx]*np.log(2)
+        amplitude = np.ptp(data_exp)
+        params['amplitude'].set(value=factor*amplitude)
+        params['decay'].set(value=decay)
         params.add('c', value=c_init)
         return params
     
