@@ -2,7 +2,7 @@ import numpy as np
 import scipy.signal as scisig
 from .util import percentile_range_data
 
-def smoothen(data: np.ndarray, t = 1, numtaps: int = 21, smoothing_width: float = 10):
+def smoothen(data: np.ndarray, t = 1, numtaps: int = 11, smoothing_width: float = 10):
     """Smoothen the data by applying fir filter with zero phase.
     Args:
         data (np.ndarray): data to be smoothened
@@ -22,7 +22,7 @@ def smoothen(data: np.ndarray, t = 1, numtaps: int = 21, smoothing_width: float 
     
     fs = 1/dt
     cutoff = 1/smoothing_width
-    b = scisig.firwin(numtaps=21, cutoff=cutoff, fs=fs)
+    b = scisig.firwin(numtaps=numtaps, cutoff=cutoff, fs=fs)
     data_lp = scisig.filtfilt(b, 1, data) # apply zero phase filter
     return data_lp
 
