@@ -1,8 +1,9 @@
 from typing import Tuple
 import matplotlib.pyplot as plt
+from matplotlib.colors import to_rgb
 import numpy as np
 
-def plot_Sparameter(freq: np.ndarray, cplx: np.ndarray, frequency_unit: str = None, title: str = None, figsize: Tuple[float, float] = (12, 6), fig=None, color=None):
+def plot_Sparameter(freq: np.ndarray, cplx: np.ndarray, frequency_unit: str = None, title: str = None, figsize: Tuple[float, float] = (12, 6), fig=None, color="tab:blue"):
     """Plot S parameter
     
     Args:
@@ -45,15 +46,10 @@ def plot_Sparameter(freq: np.ndarray, cplx: np.ndarray, frequency_unit: str = No
         ax_amp = fig.axes[0]
         ax_ph = fig.axes[1]
         ax_polar = fig.axes[2]
-
-    cmap = plt.get_cmap('tab10')
-    if color is None:
-        color = cmap(0)
-    elif isinstance(color, int):
-        color = cmap(color)
     
-    ax_amp.plot(freq, np.abs(cplx), "o", color=color, fillstyle="none", markersize=5)
-    ax_ph.plot(freq, np.angle(cplx), "o", color=color, fillstyle="none", markersize=5)
-    ax_polar.plot(np.angle(cplx), np.abs(cplx), "o", color=color, fillstyle="none", markersize=5)
+    color_trans = to_rgb(color)+(0.5,)
+    ax_amp.plot(freq, np.abs(cplx), "o-", color=color_trans, fillstyle="none", markeredgecolor=color, markeredgewidth=2, markersize=5)
+    ax_ph.plot(freq, np.angle(cplx), "o-", color=color_trans, fillstyle="none", markeredgecolor=color, markeredgewidth=2, markersize=5)
+    ax_polar.plot(np.angle(cplx), np.abs(cplx), "o", color=color_trans, fillstyle="none", markeredgecolor=color, markeredgewidth=2, markersize=5)
      
     return fig
