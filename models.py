@@ -51,7 +51,8 @@ class DampedOscillationModel(lmfit.model.Model):
     def _set_paramhints_prefix(self):
         self.set_param_hint('amplitude', min=0)
         self.set_param_hint('frequency', min=0)
-        self.set_param_hint('phase', min=-np.pi, max=np.pi)
+        #self.set_param_hint('phase', min=-np.pi, max=np.pi) # tend to stack at the boundary
+        self.set_param_hint('phase', min=-2*np.pi-1e-5, max=2*np.pi+1e-5) 
         
     def guess(self, data, x, **kwargs):
         N = len(data)
@@ -322,11 +323,15 @@ class Exponential_plus_ConstantModel(lmfit.model.CompositeModel):
             c_init = min(data)
             factor = 1
         data_exp = factor*(data - c_init)
-        idx = np.where(data_exp < data_exp[0] - 0.5*np.ptp(data_exp))[0][0]
+        idxs = np.where(data_exp < data_exp[0] - 0.5*np.ptp(data_exp))[0]
+        if len(idxs) > 0:
+            idx = np.where(data_exp < data_exp[0] - 0.5*np.ptp(data_exp))[0][0]
+        else:
+            idx = len(data)//2
         decay = x[idx]*np.log(2)
         amplitude = np.ptp(data_exp)
         params['amplitude'].set(value=factor*amplitude)
-        params['decay'].set(value=decay)
+        params['decay'].set(value=decay, min=0)
         params.add('c', value=c_init)
         return params
     
