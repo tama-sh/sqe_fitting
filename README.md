@@ -1,5 +1,5 @@
 # SQE fitting
-[lmfit](https://lmfit.github.io/lmfit-py/)-based fitting cods for superconducting qubit experiments.
+[lmfit](https://lmfit.github.io/lmfit-py/)-based fitting codes for superconducting qubit experiments.
 
 # Fitting models
 The following are fitting models provided in this module:
