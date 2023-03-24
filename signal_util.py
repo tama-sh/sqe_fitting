@@ -135,6 +135,51 @@ def find_major_axis(cplx: np.ndarray):
     theta = np.arctan2(eigvec[idx, 0], eigvec[idx, 1])
     return theta
 
+def pelt_linear(y, penalty, x=None):
+    """Pruned Exact Linear Time (PELT) changepoints detection for linear regression
+    Ref: https://arxiv.org/abs/1101.1438
+    - linear regression: maximum log-likelihood loss function -> least square
+    - For maximum likelihood loss function: K = 0
+
+    Args:
+        y (np.ndarray): 1-dimensional array of data
+        penalty (float): penalty of broken line
+        x (np.ndarray): 1-dimensional array of data
+    return:
+        list: change points
+    """
+    N = len(y)
+    if x is None:
+        x = np.arange(N)
+
+    change_points = {}
+    change_points[-1] = []
+    cost = np.zeros(N+1)
+    cost[-1] = -penalty
+    bending_candidates = [-1]  # collection of bending points
+
+    for n in np.arange(N):
+        cfit = []
+        f = []
+        for k in bending_candidates:
+            if len(y[k+1:n+1]) <= 2:
+                cfit.append(0)  # residuals = 0 for less than or equal to 2 samples
+            else:
+                _, res, *_ = np.polyfit(x[k+1:n+1], y[k+1:n+1], 1, full=True)
+                cfit.append(res[0]) # residuals as a measure of fit
+            f.append(cost[k])
+        total_cost_list = np.array(f) + np.array(cfit) + penalty  # Add penalty of bending
+        
+        min_index = np.argmin(total_cost_list)
+        cost[n] = total_cost_list[min_index]
+
+        best_bending_point = bending_candidates[min_index]
+        change_points[n] = deepcopy(change_points[best_bending_point]) + [best_bending_point]
+        bending_candidates.append(n)
+ 
+    rst = change_points[N-1]
+    return rst[1:]
+
 # Guess utlility
 def guess_peak_or_dip(data):
     """ Guess data has a peak or a dip
