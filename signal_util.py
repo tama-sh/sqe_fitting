@@ -1,5 +1,6 @@
 import numpy as np
 import scipy.signal as scisig
+from copy import deepcopy
 from .util import percentile_range_data
 
 def smoothen(data: np.ndarray, t = 1, numtaps: int = 11, smoothing_width: float = 10):
