@@ -1,6 +1,6 @@
 import numpy as np
 import operator
-import lmfit 
+import lmfit
 
 from lmfit.models import (
     LorentzianModel,
@@ -15,6 +15,7 @@ from .electrical_delay_fitter import (
     estimate_electrical_delay_resonator,
     estimate_electrical_delay_unwrap,
     estimate_electrical_delay_from_group_delay,
+    estimate_electrical_delay_from_edge_delay,
     correct_electrical_delay)
 from .circle_fitter import algebric_circle_fit
 import scipy.signal as scisig
@@ -79,7 +80,6 @@ class DampedOscillationModel(lmfit.model.Model):
         pars['phase'].set(value=phase)
         
         return pars
-
 class ResonatorReflectionModel(lmfit.model.Model):
     def __init__(self, independent_vars=['omega'], prefix='', nan_policy='raise', reflection_type='normal', **kwargs):
         kwargs.update({'prefix': prefix, 'nan_policy': nan_policy,
@@ -110,8 +110,12 @@ class ResonatorReflectionModel(lmfit.model.Model):
                  electrical_delay = estimate_electrical_delay_resonator(cplx, omega)
             elif electrical_delay_estimation == "group delay":
                 electrical_delay = estimate_electrical_delay_from_group_delay(cplx, omega)
+            elif electrical_delay_estimation == "edge group delay":
+                electrical_delay = estimate_electrical_delay_from_edge_delay(cplx, omega)
             elif electrical_delay_estimation == "unwrap overcoupled":
                 electrical_delay = estimate_electrical_delay_unwrap(cplx, omega, accumulated_phase=-2*np.pi)
+            elif electrical_delay_estimation == "unwrap double resonator overcoupled":
+                electrical_delay = estimate_electrical_delay_unwrap(cplx, omega, accumulated_phase=-4*np.pi)
             elif electrical_delay_estimation == "unwrap undercoupled":
                 electrical_delay = estimate_electrical_delay_unwrap(cplx, omega, accumulated_phase=0)
             elif electrical_delay_estimation == "none":
@@ -190,6 +194,7 @@ class DoubleResonatorReflectionModel(lmfit.model.Model):
         self.set_param_hint('kappa_ex_0', min=0)
         self.set_param_hint('kappa_in_0', min=0)
         self.set_param_hint('kappa_ex_1', min=0)
+        self.set_param_hint('kappa_in_0', min=0)
         self.set_param_hint('kappa_in_1', min=0)
         self.set_param_hint('a', min=0)
         self.set_param_hint('reflection_factor', value=self.reflection_factor, vary=False)
@@ -197,7 +202,7 @@ class DoubleResonatorReflectionModel(lmfit.model.Model):
     def guess(self, cplx, omega, smoothing_width=10, fix_electrical_delay=True, **kwargs):
         pars = self.make_params()
         
-        electrical_delay = estimate_electrical_delay_unwrap(cplx, omega, accumulated_phase=-4*np.pi)
+        electrical_delay = estimate_electrical_delay_from_edge_delay(cplx, omega)
         cplx_c = correct_electrical_delay(cplx, omega, electrical_delay)
 
         # estimate amplitude baseline
@@ -215,6 +220,9 @@ class DoubleResonatorReflectionModel(lmfit.model.Model):
         sigmas = 0.5*scisig.peak_widths(s_lorentz, peaks, rel_height=0.5)[0]*(omega_mid[1]-omega_mid[0])
         heights = properties['peak_heights']
         
+        print('TESTING: peaks:', peaks)
+        print('omega_mid[peaks[0]] :', omega_mid[peaks[0]] )
+
         if len(peaks) == 2:
             pars['r0_amplitude'].set(value=heights[0]*(sigmas[0]*np.pi))
             pars['r1_amplitude'].set(value=heights[1]*(sigmas[1]*np.pi))
@@ -226,7 +234,7 @@ class DoubleResonatorReflectionModel(lmfit.model.Model):
             pars['r0_amplitude'].set(value=heights[0]*(sigmas[0]*np.pi))
             pars['r1_amplitude'].set(value=heights[0]*(sigmas[0]*np.pi))
             pars['r0_center'].set(value=omega_mid[peaks[0]]) 
-            pars['r1_center'].set(value=omega_mid[peaks[0]])
+            pars['r1_center'].set(value=omega_mid[peaks[0]] + 50) ### add 50 MHz
             pars['r0_sigma'].set(value=sigmas[0])
             pars['r1_sigma'].set(value=sigmas[0])
         
@@ -251,6 +259,9 @@ class DoubleResonatorReflectionModel(lmfit.model.Model):
         
         # parepare parameters
         pars = self.make_params()
+
+        print('HERE: pars:', pars)
+
         pars['a'].set(value=a)
         pars['omega_0'].set(value=omega_0)
         pars['kappa_ex_0'].set(value=kappa_ex_0)
@@ -268,7 +279,137 @@ class DoubleResonatorReflectionModel(lmfit.model.Model):
         pars['theta'].set(value=0)
 
         return update_param_vals(pars, self.prefix, **kwargs)
+
+def double_resonator_reflection_2(omega, omega_0, kappa_in_0, omega_1, kappa_in_1, kappa_ext, J, a, a_grad, tau, theta, reflection_factor=1):
+
+    val = (a+a_grad*(omega))*np.exp(1j*(theta-omega*tau))*(1-(-1j*4*reflection_factor*kappa_ext*(omega_0 - omega))/(4 * J**2 + (2*-1j*(omega_1 - omega) + kappa_ext + kappa_in_1) * (2*-1j*(omega_0 - omega) + kappa_in_0)))  
+
+    return val
+class DoubleResonatorReflectionModel_2(lmfit.model.Model):
+    def __init__(self, independent_vars=['omega'], prefix='', nan_policy='raise', reflection_type='normal', **kwargs):
+        kwargs.update({'prefix': prefix, 'nan_policy': nan_policy,
+                       'independent_vars': independent_vars})
+        if reflection_type == 'normal':
+            self.reflection_type = reflection_type
+            self.reflection_factor = 1
+        elif reflection_type == 'hanger':
+            self.reflection_type = reflection_type
+            self.reflection_factor = 0.5
+        else:
+            raise ValueError(f"Reflection type '{reflection_type}' is not supprted")
+        super().__init__(double_resonator_reflection_2, **kwargs)
+        self._set_paramhints_prefix()
     
+    def _set_paramhints_prefix(self):
+        # attributes = dir(self)
+        # print('attributes:', attributes)
+        # print('attribute keys:', self.__dict__.values())
+        self.set_param_hint('kappa_ext', min=40, max = 150)
+        self.set_param_hint('J', min=5, max = 50)
+        self.set_param_hint('omega_0', min=0)
+        self.set_param_hint('omega_1', min=0)
+        self.set_param_hint('kappa_in_0', min = 0, max = 2)
+        self.set_param_hint('kappa_in_1', min = 0, max = 2)
+        #self.set_param_hint('a', min=1e9, max = 2*10e9)
+        self.set_param_hint('a_grad', min=-2*10e9, max = 2*10e9)
+        self.set_param_hint('reflection_factor', value=self.reflection_factor, vary=False)
+        self.set_param_hint('theta', min=-0.1*np.pi, max = 0.1*np.pi)
+        self.set_param_hint('tau', min=-0.02, max = 0.02)
+
+    def guess(self, cplx, omega, smoothing_width=10, fix_electrical_delay=True, **kwargs):
+        pars = self.make_params()
+        
+        electrical_delay = estimate_electrical_delay_from_edge_delay(cplx, omega)
+        cplx_c = correct_electrical_delay(cplx, omega, electrical_delay)
+
+        # estimate amplitude baseline
+        a = np.mean(percentile_range_data(abs(cplx_c), (0.75, 1)))
+        
+        # derivative-based guess
+        omega_mid = middle_points(omega)
+
+        cplx_lp = smoothen(cplx_c, smoothing_width=smoothing_width)
+        s_lorentz = np.abs(derivative(cplx_lp, omega)) # this derivative should be Lorentzian if electrical delay is well calibrated
+
+        start_a = np.abs(cplx_lp[0])
+        end_a = np.abs(cplx_lp[-1])
+
+        grad_a_guess = (end_a - start_a)/(omega[-1] - omega[0])
+
+        double_lorentzian_model = LorentzianModel(prefix='r0_') + LorentzianModel(prefix='r1_')
+        pars = double_lorentzian_model.make_params()
+        
+        input('...')
+        plt.plot(s_lorentz)
+        plt.show()
+
+        peaks, properties = find_peaks(s_lorentz, omega_mid, height=5, prominence=5)
+        sigmas = 0.5*scisig.peak_widths(s_lorentz, peaks, rel_height=0.5)[0]*(omega_mid[1]-omega_mid[0])
+        heights = properties['peak_heights']
+
+        if len(peaks) == 2:
+            pars['r0_amplitude'].set(value=heights[0]*(sigmas[0]*np.pi))
+            pars['r1_amplitude'].set(value=heights[1]*(sigmas[1]*np.pi))
+            pars['r0_center'].set(value=omega_mid[peaks[0]]) 
+            pars['r1_center'].set(value=omega_mid[peaks[1]])
+            pars['r0_sigma'].set(value=sigmas[0])
+            pars['r1_sigma'].set(value=sigmas[1])
+        else:
+            pars['r0_amplitude'].set(value=heights[0]*(sigmas[0]*np.pi))
+            pars['r1_amplitude'].set(value=heights[0]*(sigmas[0]*np.pi))
+            pars['r0_center'].set(value=omega_mid[peaks[0]]) 
+            pars['r1_center'].set(value=omega_mid[peaks[0]] + 10) ### add 10 MHz
+            pars['r0_sigma'].set(value=sigmas[0])
+            pars['r1_sigma'].set(value=sigmas[0])
+        
+        rst = double_lorentzian_model.fit(s_lorentz, x=omega_mid, params=pars)
+        
+        amp_0 = rst.params['r0_amplitude'].value
+        mu_0 = rst.params['r0_center'].value
+        sigma_0 = rst.params['r0_sigma'].value
+        
+        amp_1 = rst.params['r1_amplitude'].value
+        mu_1 = rst.params['r1_center'].value
+        sigma_1 = rst.params['r1_sigma'].value
+
+        ##
+        omega_0 = mu_0
+        kappa_tot_0 = 2*sigma_0
+        kappa_ex_0 = amp_0*sigma_0/(np.pi*a)/self.reflection_factor
+        kappa_in_0 = max(0, kappa_tot_0-kappa_ex_0)
+        omega_1 = mu_1
+        kappa_tot_1 = 2*sigma_1
+        kappa_ex_1 = amp_1*sigma_1/(np.pi*a)/self.reflection_factor
+        kappa_in_1 = max(0, kappa_tot_1-kappa_ex_1)
+        ##
+
+        kappa_ext = kappa_ex_0 + kappa_ex_1
+
+        # parepare parameters
+        pars = self.make_params()
+
+        #print('HERE: pars:', pars)
+
+        omega_middle = (omega[-1] + omega[0])/2
+
+        pars['a'].set(value=a - grad_a_guess*omega_middle, vary = False)
+        pars['a_grad'].set(value=grad_a_guess, vary=False)
+
+        pars['omega_0'].set(value=omega_0)
+        pars['kappa_in_0'].set(value = kappa_in_0)
+        pars['omega_1'].set(value=omega_1)
+        pars['kappa_in_1'].set(value = kappa_in_1)
+        pars['kappa_ext'].set(value=kappa_ext)
+        pars['J'].set(value= 20) # assume J value of 25 MHz
+
+        if fix_electrical_delay:
+            pars['tau'].set(value=0, vary=False)
+        else:
+            pars['tau'].set(value=electrical_delay)
+        pars['theta'].set(value=0, vary = False)
+
+        return update_param_vals(pars, self.prefix, **kwargs)
+
 # Composite models
 class Lorentzian_plus_ConstantModel(lmfit.model.CompositeModel):
     def __init__(self, independent_vars=['x'], prefix='', nan_policy='raise', **kwargs):
@@ -301,7 +442,6 @@ class Lorentzian_plus_ConstantModel(lmfit.model.CompositeModel):
         params['c'].set(value=c_init)
         
         return params     
-
 class Exponential_plus_ConstantModel(lmfit.model.CompositeModel):
     def __init__(self, independent_vars=['x'], prefix='', nan_policy='raise', **kwargs):
         kwargs.update({'prefix': prefix, 'nan_policy': nan_policy, 'independent_vars': independent_vars})
@@ -334,7 +474,7 @@ class Exponential_plus_ConstantModel(lmfit.model.CompositeModel):
         params['decay'].set(value=decay, min=0)
         params.add('c', value=c_init)
         return params
-    
+
 class DampedOscillation_plus_ConstantModel(lmfit.model.CompositeModel):
     def __init__(self, independent_vars=['x'], prefix='', nan_policy='raise', **kwargs):
         kwargs.update({'prefix': prefix, 'nan_policy': nan_policy, 'independent_vars': independent_vars})
@@ -346,4 +486,3 @@ class DampedOscillation_plus_ConstantModel(lmfit.model.CompositeModel):
         params = self.left.guess(data-c_init, x=x)
         params.add('c', value=c_init)
         return params
-    

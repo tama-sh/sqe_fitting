@@ -8,6 +8,8 @@ from .circle_fitter import algebric_circle_fit
 from .models import (
     DampedOscillationModel,
     ResonatorReflectionModel,
+    DoubleResonatorReflectionModel,
+    DoubleResonatorReflectionModel_2,
     Lorentzian_plus_ConstantModel,
     Exponential_plus_ConstantModel,
     DampedOscillation_plus_ConstantModel

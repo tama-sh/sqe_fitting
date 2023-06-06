@@ -3,7 +3,7 @@ from typing import Tuple
 import numpy as np
 import lmfit
 from .util import percentile_range_data
-from .signal_util import group_delay, smoothen
+from .signal_util import group_delay, group_delay_smoothed, smoothen
 from .circle_fitter import algebric_circle_fit
 
 def correct_electrical_delay(cplx: np.ndarray, omega: np.ndarray, electrical_delay=None, phase_offset=None, phase_auto_correct=False):
@@ -21,6 +21,8 @@ def correct_electrical_delay(cplx: np.ndarray, omega: np.ndarray, electrical_del
     """
     if electrical_delay is None:
         electrical_delay = estimate_electrical_delay_from_group_delay(cplx, omega)
+    #print('electrical_delay:', electrical_delay)
+    
     cplx_c = cplx*np.exp(1j*electrical_delay*omega)
     if phase_offset:
         return cplx_c*np.exp(-1j*phase_offset)
@@ -46,7 +48,7 @@ def estimate_electrical_delay_unwrap(cplx: np.ndarray, omega: np.ndarray, accumu
     return electrical_delay
 
 def estimate_electrical_delay_from_group_delay(cplx: np.ndarray, omega: np.ndarray, percentile_range: Tuple[float, float] = (0, 0.5)):
-    """Estimate electridal delay from the group delay
+    """Estimate electrical delay from the group delay
     
     Args:
         cplx (np.ndarray): complex data with electrical delay
@@ -59,8 +61,37 @@ def estimate_electrical_delay_from_group_delay(cplx: np.ndarray, omega: np.ndarr
     delay = group_delay(cplx, omega)
     return np.mean(percentile_range_data(delay, percentile_range))
 
+def estimate_electrical_delay_from_edge_delay(cplx: np.ndarray, omega: np.ndarray, edges = 'both'):
+    """Estimate electrical delay from the median delay at the edges of the frequency window
+    
+    Args:
+        cplx (np.ndarray): complex data with electrical delay
+        omega (np.ndarray): angular frequency
+        edges (str): which edge data to use - 'left', 'right', or 'both'
+
+    Returns:
+        float: electrical delay
+    """
+    
+    smoothed_freqs, delay = group_delay_smoothed(cplx, omega)
+
+    left_delay = delay[:15]
+    right_delay = delay[-15:-1]
+
+    left_median = np.median(left_delay)
+    right_median = np.median(right_delay)
+
+    if edges == 'left':
+        delay_median = left_median
+    if edges == 'right':
+        delay_median = left_median
+    if edges == 'both':
+        delay_median = (left_median + right_median) / 2       
+
+    return delay_median
+
 def estimate_electrical_delay_circle_fit(cplx: np.ndarray, omega: np.ndarray, electrical_delay_init=0, return_minimizer_result=False):
-    """Estimate electridal delay from algebric circle fit
+    """Estimate electrical delay from algebric circle fit
     
     Args:
         cplx (np.ndarray): complex data with electrical delay
@@ -103,7 +134,7 @@ def estimate_electrical_delay_circle_fit(cplx: np.ndarray, omega: np.ndarray, el
         return rst.params['electrical_delay'].value
     
 def estimate_electrical_delay_resonator(cplx: np.ndarray, omega: np.ndarray):
-    """Estimate electridal delay for resonator data
+    """Estimate electrical delay for resonator data
     
     Use estimate_electrical_delay_unwrap to give an initial guess and use estimate_electrical_delay_circle_fit after that
     
