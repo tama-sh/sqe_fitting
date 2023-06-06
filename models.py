@@ -338,10 +338,6 @@ class DoubleResonatorReflectionModel_2(lmfit.model.Model):
 
         double_lorentzian_model = LorentzianModel(prefix='r0_') + LorentzianModel(prefix='r1_')
         pars = double_lorentzian_model.make_params()
-        
-        input('...')
-        plt.plot(s_lorentz)
-        plt.show()
 
         peaks, properties = find_peaks(s_lorentz, omega_mid, height=5, prominence=5)
         sigmas = 0.5*scisig.peak_widths(s_lorentz, peaks, rel_height=0.5)[0]*(omega_mid[1]-omega_mid[0])
