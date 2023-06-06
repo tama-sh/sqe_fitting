@@ -314,7 +314,7 @@ class DoubleResonatorReflectionModel_2(lmfit.model.Model):
         self.set_param_hint('a_grad', min=-2*10e9, max = 2*10e9)
         self.set_param_hint('reflection_factor', value=self.reflection_factor, vary=False)
         self.set_param_hint('theta', min=-0.1*np.pi, max = 0.1*np.pi)
-        self.set_param_hint('tau', min=-0.02, max = 0.02)
+        self.set_param_hint('tau', min=-0.04, max = 0.04)
 
     def guess(self, cplx, omega, smoothing_width=10, fix_electrical_delay=True, **kwargs):
         pars = self.make_params()
@@ -339,7 +339,12 @@ class DoubleResonatorReflectionModel_2(lmfit.model.Model):
         double_lorentzian_model = LorentzianModel(prefix='r0_') + LorentzianModel(prefix='r1_')
         pars = double_lorentzian_model.make_params()
 
-        peaks, properties = find_peaks(s_lorentz, omega_mid, height=5, prominence=5)
+        # import matplotlib.pyplot as plt
+
+        # plt.plot(s_lorentz)
+        # plt.show()
+
+        peaks, properties = find_peaks(s_lorentz, omega_mid, height=4, prominence=4)
         sigmas = 0.5*scisig.peak_widths(s_lorentz, peaks, rel_height=0.5)[0]*(omega_mid[1]-omega_mid[0])
         heights = properties['peak_heights']
 
