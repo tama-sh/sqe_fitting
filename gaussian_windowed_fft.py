@@ -14,7 +14,7 @@ def fourier_transform(time, signal, gauss_window = None):
 
     window_std_dev = relative_window_std_dev * np.size(signal)
 
-    show = True # True for debug
+    show = False # True for debug
 
     if window_std_dev == None:
         fourier_signal = np.abs(fftpack.fft(signal))
