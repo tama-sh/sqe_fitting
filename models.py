@@ -392,9 +392,9 @@ class DoubleResonatorReflectionModel_Series(lmfit.model.Model):
             
         response_fit = rst.eval(params=rst.params, omega=omega)
         
-        plt.plot(omega[:-1], s_lorentz)
-        plt.plot(omega[:-1], response_fit)
-        plt.show()
+        # plt.plot(omega[:-1], s_lorentz)
+        # plt.plot(omega[:-1], response_fit)
+        # plt.show()
 
         amp_0 = rst.params['r0_amplitude'].value
         mu_0 = rst.params['r0_center'].value
@@ -473,22 +473,33 @@ class DoubleResonatorReflectionModel_Series_g_e():
                 
         ## set the g parameters
         state = 'g'
-        self.params.add('{}_kappa_p'.format(state), value = self.kappa_p, min=max(0, self.kappa_p - 40), max = self.kappa_p + 40)
-        self.params.add('{}_J'.format(state), value = self.J, min=max(0, self.J - 25), max = self.J + 25)
-        self.params.add('{}_omega_r'.format(state), value = self.omega_r, min=self.omega_r - 30, max = self.omega_r + 30)
-        self.params.add('{}_omega_p'.format(state), value = self.omega_p, min=self.omega_p - 30, max = self.omega_p + 30)
+        self.params.add('{}_kappa_p'.format(state), value = self.kappa_p, min=max(0, self.kappa_p - 20), max = self.kappa_p + 20)
+        self.params.add('{}_J'.format(state), value = self.J, min=max(0, self.J - 15), max = self.J + 15)
+        self.params.add('{}_omega_r'.format(state), value = self.omega_r, min=self.omega_r - 15, max = self.omega_r + 15)
+        self.params.add('{}_omega_p'.format(state), value = self.omega_p, min=self.omega_p - 15, max = self.omega_p + 15)
         if self.fit_phase_only:
             self.params.add('{}_kappa_in_r'.format(state), value = self.kappa_in_r, min=0, max = 0.5)
             self.params.add('{}_kappa_in_p'.format(state), value = self.kappa_in_p, min=0, max = 0.5)
         else:
             self.params.add('{}_kappa_in_r'.format(state), value = self.kappa_in_r, min = 0, max = 2)
             self.params.add('{}_kappa_in_p'.format(state), value = self.kappa_in_p, min = 0, max = 2)
-        
+
+        # self.params.add('{}_kappa_p'.format(state), value = self.kappa_p, min=max(0, self.kappa_p - 3), max = self.kappa_p + 3)
+        # self.params.add('{}_J'.format(state), value = self.J, min=max(0, self.J - 2), max = self.J + 2)
+        # self.params.add('{}_omega_r'.format(state), value = self.omega_r, min=self.omega_r - 3, max = self.omega_r + 3)
+        # self.params.add('{}_omega_p'.format(state), value = self.omega_p, min=self.omega_p - 3, max = self.omega_p + 3)
+        # if self.fit_phase_only:
+        #     self.params.add('{}_kappa_in_r'.format(state), value = self.kappa_in_r, min=0, max = 0.5)
+        #     self.params.add('{}_kappa_in_p'.format(state), value = self.kappa_in_p, min=0, max = 0.5)
+        # else:
+        #     self.params.add('{}_kappa_in_r'.format(state), value = self.kappa_in_r, min = 0, max = 2)
+        #     self.params.add('{}_kappa_in_p'.format(state), value = self.kappa_in_p, min = 0, max = 2)
+
         self.params.add('{}_a'.format(state), min=1e9, max = 30*10e9)
         self.params.add('{}_a_grad'.format(state), min=-2*10e9, max = 2*10e9)
         self.params.add('{}_reflection_factor'.format(state), value=self.reflection_factor, vary=False)
         self.params.add('{}_theta'.format(state), min=-0.1*np.pi, max = 0.1*np.pi)
-        self.params.add('{}_tau'.format(state), min=-0.04, max = 0.04)
+        self.params.add('{}_tau'.format(state), min=-0.075, max = 0.075) ## 0.04
 
         ### constrain the 'e' parameters
         state = 'e'
@@ -558,9 +569,9 @@ class DoubleResonatorReflectionModel_Series_g_e():
             
         response_fit = rst.eval(params=rst.params, omega=omega)
         
-        plt.plot(omega[:-1], s_lorentz)
-        plt.plot(omega[:-1], response_fit)
-        plt.show()
+        # plt.plot(omega[:-1], s_lorentz)
+        # plt.plot(omega[:-1], response_fit)
+        # plt.show()
 
         amp_0 = rst.params['r0_amplitude'].value
         mu_0 = rst.params['r0_center'].value
