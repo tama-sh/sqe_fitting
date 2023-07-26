@@ -175,7 +175,7 @@ def double_resonator_reflection(omega, omega_0, kappa_ex_0, kappa_in_0, phi_0, o
     return a*np.exp(1j*(theta-omega*tau))*(1-(reflection_factor*2*kappa_ex_0*np.exp(1j*phi_0))/(kappa_ex_0+kappa_in_0+2j*(omega-omega_0))
                                             -(reflection_factor*2*kappa_ex_1*np.exp(1j*phi_1))/(kappa_ex_1+kappa_in_1+2j*(omega-omega_1)))
 
-class DoubleResonatorReflectionModel(lmfit.model.Model):
+class DoubleResonatorReflectionModel_Parallel(lmfit.model.Model):
     def __init__(self, independent_vars=['omega'], prefix='', nan_policy='raise', reflection_type='normal', **kwargs):
         kwargs.update({'prefix': prefix, 'nan_policy': nan_policy,
                        'independent_vars': independent_vars})
@@ -285,7 +285,7 @@ def double_resonator_reflection_2(omega, omega_0, kappa_in_0, omega_1, kappa_in_
     val = (a+a_grad*(omega))*np.exp(1j*(theta-omega*tau))*(1-(-1j*4*reflection_factor*kappa_ext*(omega_0 - omega))/(4 * J**2 + (2*-1j*(omega_1 - omega) + kappa_ext + kappa_in_1) * (2*-1j*(omega_0 - omega) + kappa_in_0)))  
 
     return val
-class DoubleResonatorReflectionModel_2(lmfit.model.Model):
+class DoubleResonatorReflectionModel_Series(lmfit.model.Model):
     def __init__(self, independent_vars=['omega'], prefix='', nan_policy='raise', reflection_type='normal', **kwargs):
         kwargs.update({'prefix': prefix, 'nan_policy': nan_policy,
                        'independent_vars': independent_vars})
