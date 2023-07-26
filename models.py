@@ -604,7 +604,7 @@ class DoubleResonatorReflectionModel_Series_g_e():
 
         self.params['g_a'].set(value= a - grad_a_guess*omega_middle, vary = False)
 
-        print('a - grad_a_guess*omega_middle:', a - grad_a_guess*omega_middle)
+        # print('a - grad_a_guess*omega_middle:', a - grad_a_guess*omega_middle)
         #input('...')
         
         self.params['g_a_grad'].set(value=grad_a_guess, vary=False)
