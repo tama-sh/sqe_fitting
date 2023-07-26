@@ -10,6 +10,7 @@ from .models import (
     ResonatorReflectionModel,
     DoubleResonatorReflectionModel_Parallel,
     DoubleResonatorReflectionModel_Series,
+    DoubleResonatorReflectionModel_Series_g_e,
     Lorentzian_plus_ConstantModel,
     Exponential_plus_ConstantModel,
     DampedOscillation_plus_ConstantModel
