@@ -6,6 +6,7 @@ from lmfit.models import (
     LorentzianModel,
     ExponentialModel,
     ConstantModel,
+    GaussianModel,
     update_param_vals
 )
 
@@ -287,6 +288,7 @@ def double_resonator_reflection_series(omega, omega_r, kappa_in_r, omega_p, kapp
     #val = np.unwrap(np.angle(val))
 
     return val
+
 class DoubleResonatorReflectionModel_Series(lmfit.model.Model):
     def __init__(self, independent_vars=['omega'], prefix='', nan_policy='raise', reflection_type='normal', fit_phase_only = False, **kwargs):
         kwargs.update({'prefix': prefix, 'nan_policy': nan_policy,
@@ -447,6 +449,7 @@ class DoubleResonatorReflectionModel_Series(lmfit.model.Model):
         pars['theta'].set(value=0, vary = False)
 
         return update_param_vals(pars, self.prefix, **kwargs)
+
 
 # Composite models
 
@@ -755,6 +758,7 @@ class Exponential_plus_ConstantModel(lmfit.model.CompositeModel):
         params['decay'].set(value=decay, min=0)
         params.add('c', value=c_init)
         return params
+
 class DampedOscillation_plus_ConstantModel(lmfit.model.CompositeModel):
     def __init__(self, independent_vars=['x'], prefix='', nan_policy='raise', **kwargs):
         kwargs.update({'prefix': prefix, 'nan_policy': nan_policy, 'independent_vars': independent_vars})
