@@ -487,17 +487,6 @@ class DoubleResonatorReflectionModel_Series_g_e():
             self.params.add('{}_kappa_in_r'.format(state), value = self.kappa_in_r, min = 0, max = 2)
             self.params.add('{}_kappa_in_p'.format(state), value = self.kappa_in_p, min = 0, max = 2)
 
-        # self.params.add('{}_kappa_p'.format(state), value = self.kappa_p, min=max(0, self.kappa_p - 3), max = self.kappa_p + 3)
-        # self.params.add('{}_J'.format(state), value = self.J, min=max(0, self.J - 2), max = self.J + 2)
-        # self.params.add('{}_omega_r'.format(state), value = self.omega_r, min=self.omega_r - 3, max = self.omega_r + 3)
-        # self.params.add('{}_omega_p'.format(state), value = self.omega_p, min=self.omega_p - 3, max = self.omega_p + 3)
-        # if self.fit_phase_only:
-        #     self.params.add('{}_kappa_in_r'.format(state), value = self.kappa_in_r, min=0, max = 0.5)
-        #     self.params.add('{}_kappa_in_p'.format(state), value = self.kappa_in_p, min=0, max = 0.5)
-        # else:
-        #     self.params.add('{}_kappa_in_r'.format(state), value = self.kappa_in_r, min = 0, max = 2)
-        #     self.params.add('{}_kappa_in_p'.format(state), value = self.kappa_in_p, min = 0, max = 2)
-
         self.params.add('{}_a'.format(state), min=1e9, max = 30*10e9)
         self.params.add('{}_a_grad'.format(state), min=-2*10e9, max = 2*10e9)
         self.params.add('{}_reflection_factor'.format(state), value=self.reflection_factor, vary=False)
