@@ -82,9 +82,10 @@ class DampedOscillationModel(lmfit.model.Model):
         
         return pars
 class ResonatorReflectionModel(lmfit.model.Model):
-    def __init__(self, independent_vars=['omega'], prefix='', nan_policy='raise', reflection_type='normal', **kwargs):
+    def __init__(self, independent_vars=['omega'], prefix='', nan_policy='raise', reflection_type='normal', fit_phase_only = False, **kwargs):
         kwargs.update({'prefix': prefix, 'nan_policy': nan_policy,
                        'independent_vars': independent_vars})
+        self.fit_phase_only = fit_phase_only
         if reflection_type == 'normal':
             self.reflection_type = reflection_type
             self.reflection_factor = 1
@@ -93,7 +94,24 @@ class ResonatorReflectionModel(lmfit.model.Model):
             self.reflection_factor = 0.5
         else:
             raise ValueError(f"Reflection type '{reflection_type}' is not supprted")
-        super().__init__(resonator_reflection, **kwargs)
+        
+        if self.fit_phase_only:
+
+            def return_phase(func):
+                
+                def wrapper(omega, omega_0, kappa_ex, kappa_in, a, tau, theta, phi, reflection_factor= 1):
+
+                    val = np.unwrap(np.angle(func(omega, omega_0, kappa_ex, kappa_in, a, tau, theta, phi, reflection_factor=reflection_factor)))
+                    return val
+                
+                return wrapper
+            
+            unwrapped_resonator_reflection = return_phase(resonator_reflection)
+            super().__init__(unwrapped_resonator_reflection, **kwargs)
+
+        else:
+            super().__init__(resonator_reflection, **kwargs)
+
         self._set_paramhints_prefix()
     
     def _set_paramhints_prefix(self):
@@ -101,6 +119,10 @@ class ResonatorReflectionModel(lmfit.model.Model):
         self.set_param_hint('kappa_in', min=0)
         self.set_param_hint('a', min=0)
         self.set_param_hint('reflection_factor', value=self.reflection_factor, vary=False)
+        if self.fit_phase_only:
+            self.set_param_hint('phi', min=0, max = 0.001, value=0, vary=False)
+            self.set_param_hint('kappa_in', min=0, max = 1)
+
         
     def guess(self, cplx, omega, smoothing_width=10, fix_electrical_delay=False, electrical_delay_estimation="default", **kwargs):
         pars = self.make_params()
@@ -124,6 +146,7 @@ class ResonatorReflectionModel(lmfit.model.Model):
             else:
                 raise ValueError(f"Estimation method '{electrical_delay_estimation}' is not supprted")
             cplx_c = correct_electrical_delay(cplx, omega, electrical_delay)
+        
         else:
             cplx_c = cplx
 
@@ -167,6 +190,7 @@ class ResonatorReflectionModel(lmfit.model.Model):
             pars['tau'].set(value=0, vary=False)
         else:
             pars['tau'].set(value=electrical_delay)
+
         pars['phi'].set(value=phi)
         pars['theta'].set(value=theta)
         
@@ -221,8 +245,8 @@ class DoubleResonatorReflectionModel_Parallel(lmfit.model.Model):
         sigmas = 0.5*scisig.peak_widths(s_lorentz, peaks, rel_height=0.5)[0]*(omega_mid[1]-omega_mid[0])
         heights = properties['peak_heights']
         
-        print('TESTING: peaks:', peaks)
-        print('omega_mid[peaks[0]] :', omega_mid[peaks[0]] )
+        #print('TESTING: peaks:', peaks)
+        #print('omega_mid[peaks[0]] :', omega_mid[peaks[0]] )
 
         if len(peaks) == 2:
             pars['r0_amplitude'].set(value=heights[0]*(sigmas[0]*np.pi))
@@ -283,10 +307,7 @@ class DoubleResonatorReflectionModel_Parallel(lmfit.model.Model):
 
 def double_resonator_reflection_series(omega, omega_r, kappa_in_r, omega_p, kappa_in_p, kappa_p, J, a, a_grad, tau, theta, reflection_factor=1):
 
-    val = (a+a_grad*(omega))*np.exp(1j*(theta-omega*tau))*(1-(-1j*4*reflection_factor*kappa_p*(omega_r - omega))/(4 * J**2 + (2*-1j*(omega_p - omega) + kappa_p + kappa_in_p) * (2*-1j*(omega_r - omega) + kappa_in_r)))  
-
-    #val = np.unwrap(np.angle(val))
-
+    val = (a+a_grad*(omega))*np.exp(1j*(theta-omega*tau))*(1+(1j*4*reflection_factor*kappa_p*(omega_r - omega))/(4 * J**2 + (2*-1j*(omega_p - omega) + kappa_p + kappa_in_p) * (2*-1j*(omega_r - omega) + kappa_in_r)))  
     return val
 
 class DoubleResonatorReflectionModel_Series(lmfit.model.Model):
@@ -387,7 +408,6 @@ class DoubleResonatorReflectionModel_Series(lmfit.model.Model):
             pars['r0_sigma'].set(value=sigmas[0]) 
             pars['r1_sigma'].set(value=2*sigmas[0]) # multiply by 2 as filter resonance likely to be much wider
         
-
         rst = double_lorentzian_model.fit(s_lorentz, x=omega_mid, params=pars)
 
         #freq_fit = np.linspace(min(freq), max(freq), fit_slice)
@@ -440,7 +460,7 @@ class DoubleResonatorReflectionModel_Series(lmfit.model.Model):
         pars['omega_p'].set(value=omega_h - 10) # remove 10 MHz to account for hybridization avoided crossing
         pars['kappa_in_p'].set(value = 0)
         pars['kappa_p'].set(value=kappa_p)
-        pars['J'].set(value= 20) # assume J value of 25 MHz
+        pars['J'].set(value= 20) # assume J value of 20 MHz
 
         if fix_electrical_delay:
             pars['tau'].set(value=0, vary=False)
@@ -449,13 +469,10 @@ class DoubleResonatorReflectionModel_Series(lmfit.model.Model):
         pars['theta'].set(value=0, vary = False)
 
         return update_param_vals(pars, self.prefix, **kwargs)
-
-
 # Composite models
-
 class DoubleResonatorReflectionModel_Series_g_e():
     
-    def __init__(self, omega_r, omega_p, kappa_in_r, kappa_in_p, kappa_p, J, fit_phase_only = False, reflection_type = 'normal'):
+    def __init__(self, omega_r, omega_p, kappa_in_r, kappa_in_p, kappa_p, J, fit_phase_only = False, fit_group_delay_only = False, reflection_type = 'normal'):
 
         self.params = lmfit.Parameters()
         self.omega_r = omega_r
@@ -465,6 +482,8 @@ class DoubleResonatorReflectionModel_Series_g_e():
         self.kappa_p = kappa_p
         self.J = J
         self.fit_phase_only = fit_phase_only
+        self.fit_group_delay_only = fit_group_delay_only
+        
         if reflection_type == 'normal':
             self.reflection_type = reflection_type
             self.reflection_factor = 1
@@ -476,15 +495,15 @@ class DoubleResonatorReflectionModel_Series_g_e():
                 
         ## set the g parameters
         state = 'g'
-        self.params.add('{}_kappa_p'.format(state), value = self.kappa_p, min=max(0, self.kappa_p - 20), max = self.kappa_p + 20)
-        self.params.add('{}_J'.format(state), value = self.J, min=max(0, self.J - 15), max = self.J + 15)
-        self.params.add('{}_omega_r'.format(state), value = self.omega_r, min=self.omega_r - 15, max = self.omega_r + 15)
-        self.params.add('{}_omega_p'.format(state), value = self.omega_p, min=self.omega_p - 15, max = self.omega_p + 15)
-        if self.fit_phase_only:
-            self.params.add('{}_kappa_in_r'.format(state), value = self.kappa_in_r, min=0, max = 0.5)
-            self.params.add('{}_kappa_in_p'.format(state), value = self.kappa_in_p, min=0, max = 0.5)
+        self.params.add('{}_kappa_p'.format(state), value = self.kappa_p, min=max(0, self.kappa_p - 40), max = 140)
+        self.params.add('{}_J'.format(state), value = self.J, min= 20, max = 40) ## min=max(0, self.J - 15), max = self.J + 15
+        self.params.add('{}_omega_r'.format(state), value = self.omega_r, min=self.omega_r - 80, max = self.omega_r + 80) ## min=self.omega_r - 15, max = self.omega_r + 15
+        self.params.add('{}_omega_p'.format(state), value = self.omega_p, min=self.omega_p - 80, max = self.omega_p + 80) ## min=self.omega_p - 15, max = self.omega_p + 15
+        if self.fit_phase_only: 
+            self.params.add('{}_kappa_in_r'.format(state), value = 0, vary=False) # test fixing here vary=False #  value = self.kappa_in_r, min=0, max = 0.5
+            self.params.add('{}_kappa_in_p'.format(state), value = 3, vary=False) # vary=False
         else:
-            self.params.add('{}_kappa_in_r'.format(state), value = self.kappa_in_r, min = 0, max = 2)
+            self.params.add('{}_kappa_in_r'.format(state), value = self.kappa_in_r, min = 0, max = 2) 
             self.params.add('{}_kappa_in_p'.format(state), value = self.kappa_in_p, min = 0, max = 2)
 
         self.params.add('{}_a'.format(state), min=1e9, max = 30*10e9)
@@ -497,7 +516,7 @@ class DoubleResonatorReflectionModel_Series_g_e():
         state = 'e'
         self.params.add('{}_kappa_p'.format(state), expr='g_kappa_p')
         self.params.add('{}_J'.format(state), expr='g_J')
-        self.params.add('chi'.format(state), value = 1, min = -10, max = 0)
+        self.params.add('chi'.format(state), value = 1, min = -12.5, max = -2)
         self.params.add('{}_omega_r'.format(state), expr='g_omega_r + 2*chi')
         self.params.add('{}_omega_p'.format(state), expr='g_omega_p')
         if self.fit_phase_only:
@@ -613,7 +632,7 @@ class DoubleResonatorReflectionModel_Series_g_e():
 
     def simultaneous_fit(self, data, omega, params = None, method = 'basinhopping'):
 
-        from lmfit import minimize
+        from lmfit import Minimizer, minimize
 
         def fit_func(params, i, omega):
 
@@ -639,6 +658,13 @@ class DoubleResonatorReflectionModel_Series_g_e():
             if self.fit_phase_only:
                 val = np.unwrap(np.angle(val))
 
+            if self.fit_group_delay_only:
+                delta = 0.1
+                val1 = double_resonator_reflection_series(omega + delta, omega_r, kappa_in_r, omega_p, kappa_in_p, kappa_p, J, a, a_grad, tau, theta, reflection_factor=reflection_factor)
+                val2 = double_resonator_reflection_series(omega - delta, omega_r, kappa_in_r, omega_p, kappa_in_p, kappa_p, J, a, a_grad, tau, theta, reflection_factor=reflection_factor)
+
+                val = (np.unwrap(np.angle(val1)) - np.unwrap(np.angle(val2)))/(2*delta)
+
             return val
 
         def objective(params, omega, data):
@@ -647,17 +673,22 @@ class DoubleResonatorReflectionModel_Series_g_e():
             ndata, nx = data.shape
             resid = 0.0*data[:]
             # make residual per data set
+            
             for i in range(ndata):
-                resid[i, :] = data[i, :] - fit_func(params, i, omega)
+                    
+                dat = data[i, :]
+                
+                resid[i, :] = dat - fit_func(params, i, omega)
             # now flatten this to a 1D array, as minimize() needs
             return np.abs(resid.flatten())
 
         if params is None:    
             params = self.self.params
 
+        mini = Minimizer(objective, params, fcn_args=(omega, data))
         result = minimize(objective, params, args=(omega, data), method = method)
 
-        return result
+        return result, mini
 
     def eval(self, omega, params = None):
         
@@ -674,7 +705,304 @@ class DoubleResonatorReflectionModel_Series_g_e():
 
             state_param_dict = {key[2:]:value for key, value in param_dict.items() if (state +'_') in key}
 
-            val = double_resonator_reflection_series(omega, **state_param_dict)
+            if self.fit_group_delay_only:
+                delta = 0.1
+                val1 = double_resonator_reflection_series(omega + delta, **state_param_dict)
+                val2 = double_resonator_reflection_series(omega - delta, **state_param_dict)
+                val = (val1  - val2)/(2*delta)
+
+            else:
+                val = double_resonator_reflection_series(omega, **state_param_dict)
+            
+                if self.fit_phase_only:
+                    val = np.unwrap(np.angle(val))
+            
+            vals.append(val)
+
+        return np.array(vals)
+
+def double_resonator_reflection_series_K_Factor(omega, omega_r, kappa_in_r, omega_p, kappa_in_p, kappa_p, J):
+
+    ## K factor describes the relation between the input power wave and the mode amplitude of the dedicated filter resonator,
+    ## through the relation: a_input = sqrt(filter_external_decay)*K_Factor*a_mode_amp
+    
+    K_Factor_val = -1j*4*kappa_p*((omega_r - omega)+1j(kappa_in_r/2))/(4 * J**2 + (2*-1j*(omega_p - omega) + kappa_p + kappa_in_p) * (2*-1j*(omega_r - omega) + kappa_in_r))
+    
+    return K_Factor_val
+
+def double_resonator_reflection_series_in_parallel(omega, a, a_grad, tau, theta, param_bundles):
+    
+    ## param_bundles = [(param_bundle_1),(param_bundle_2),...]
+    ## where param_bundle_i = (omega_r_i, kappa_in_r_i, omega_p_i, kappa_in_p_i, kappa_p_i, J_i)
+    
+    no_of_parallel_resonators = len(param_bundles)
+    
+    K_factors = []
+    filter_external_decays = []
+    
+    for param_bundle in param_bundles:
+        
+        _, _, _, _, filter_external_decay, _ = param_bundle
+        
+        filter_external_decays.append(filter_external_decay)
+        
+        K_factor = double_resonator_reflection_series_K_Factor(omega, *param_bundle)
+        K_factors.append(K_factor)
+    
+    def S_i1_scatter_param(filter_external_decays, K_factors, no_of_parallel_resonators, i):
+        
+        sum_term = np.sum(np.array([filter_external_decays[l]*K_factors[l]/(1-filter_external_decays[l]*K_factors[l]) for l in range(no_of_parallel_resonators) if l!=i]))
+        
+        val = 1/(1+0.5*(1-filter_external_decays[i]*K_factors[i])*sum_term)
+        
+        return val
+        
+    val = np.sum(np.array([K_factors[i]*filter_external_decays[i]*S_i1_scatter_param(filter_external_decays, K_factors, no_of_parallel_resonators, i) for i in range(no_of_parallel_resonators)]))
+        
+    val = 1 - val
+    
+    # scale using external electrical length
+    
+    val = (a+a_grad*(omega))*np.exp(1j*(theta-omega*tau))*val
+    
+    return val 
+        
+class DoubleResonatorReflectionModel_Simultaneous_Series_g_e():
+    
+    def __init__(self, param_bundles, pi_pulsed_qubits = [], fit_phase_only = False):
+
+        ## omega_r, omega_p, kappa_in_r, kappa_in_p, kappa_p, J,
+
+        self.params = lmfit.Parameters()
+        self.param_bundles = param_bundles
+        self.fit_phase_only = fit_phase_only
+        
+        for qubit, param_bundle in param_bundles.items():
+        
+            omega_r, kappa_in_r, omega_p, kappa_in_p, kappa_p, J = param_bundle
+        
+            ## set the g parameters
+            state = 'g'
+            self.params.add('{}_kappa_p_{}'.format(state, qubit), value = kappa_p, min=max(0, kappa_p - 40), max = 140)
+            self.params.add('{}_J_{}'.format(state, qubit), value = J, min= 20, max = 40) ## min=max(0, self.J - 15), max = self.J + 15
+            self.params.add('{}_omega_r_{}'.format(state, qubit), value = omega_r, min=omega_r - 80, max = omega_r + 80) ## min=self.omega_r - 15, max = self.omega_r + 15
+            self.params.add('{}_omega_p_{}'.format(state, qubit), value = omega_p, min=omega_p - 80, max = omega_p + 80) ## min=self.omega_p - 15, max = self.omega_p + 15
+            
+            if self.fit_phase_only: 
+                self.params.add('{}_kappa_in_r_{}'.format(state, qubit), value = 0, vary=False) # test fixing here vary=False #  value = self.kappa_in_r, min=0, max = 0.5
+                self.params.add('{}_kappa_in_p_{}'.format(state, qubit), value = 0, vary=False) # vary=False
+                
+            else:
+                self.params.add('{}_kappa_in_r_{}'.format(state, qubit), value = kappa_in_r, min = 0, max = 2) 
+                self.params.add('{}_kappa_in_p_{}'.format(state, qubit), value = kappa_in_p, min = 0, max = 2)
+
+            self.params.add('{}_a'.format(state, qubit), min=1e9, max = 30*10e9)
+            self.params.add('{}_a_grad'.format(state, qubit), min=-2*10e9, max = 2*10e9)
+            self.params.add('{}_reflection_factor'.format(state, qubit), value=1, vary=False)
+            self.params.add('{}_theta'.format(state, qubit), min=-0.1*np.pi, max = 0.1*np.pi)
+            self.params.add('{}_tau'.format(state, qubit), min=-0.075, max = 0.075) ## 0.04
+
+            ### constrain the 'e' parameters
+            state = 'e'
+            self.params.add('{}_kappa_p_{}'.format(state, qubit), expr='g_kappa_p')
+            self.params.add('{}_J_{}'.format(state, qubit), expr='g_J')
+            self.params.add('chi_{}'.format(state, qubit), value = 1, min = -12.5, max = -2)
+            if qubit in pi_pulsed_qubits:
+                self.params.add('{}_omega_r_{}'.format(state, qubit), expr='g_omega_r + 2*chi')
+            else:
+                self.params.add('{}_omega_r_{}'.format(state, qubit), expr='g_omega_r')
+            self.params.add('{}_omega_p_{}'.format(state, qubit), expr='g_omega_p')
+            
+            if self.fit_phase_only:
+                self.params.add('{}_kappa_in_r_{}'.format(state, qubit), expr='g_kappa_in_r')
+                self.params.add('{}_kappa_in_p_{}'.format(state, qubit), expr='g_kappa_in_p')
+                
+            else:
+                self.params.add('{}_kappa_in_r_{}'.format(state, qubit), expr='g_kappa_in_r')
+                self.params.add('{}_kappa_in_p_{}'.format(state, qubit), expr='g_kappa_in_p')
+                
+            self.params.add('{}_a'.format(state), expr='g_a')
+            self.params.add('{}_a_grad'.format(state), expr='g_a_grad')
+            self.params.add('{}_reflection_factor'.format(state), expr='g_reflection_factor')
+            self.params.add('{}_theta'.format(state), expr='g_theta')
+            self.params.add('{}_tau'.format(state), expr='g_tau')
+
+    def guess(self, cplx, omega, smoothing_width=8, fix_electrical_delay=True, **kwargs):
+        ### currently only used to find lione scaling parameters 
+                        
+        electrical_delay = estimate_electrical_delay_from_edge_delay(cplx, omega)
+        cplx_c = correct_electrical_delay(cplx, omega, electrical_delay)
+
+        # estimate amplitude baseline
+        a = np.mean(percentile_range_data(abs(cplx_c), (0.75, 1)))
+        
+        # derivative-based guess
+        omega_mid = middle_points(omega)
+
+        cplx_lp = smoothen(cplx_c, smoothing_width=smoothing_width)
+        s_lorentz = np.abs(derivative(cplx_lp, omega)) # this derivative should be Lorentzian if electrical delay is well calibrated
+
+        start_a = np.abs(cplx_lp[0])
+        end_a = np.abs(cplx_lp[-1])
+
+        grad_a_guess = (end_a - start_a)/(omega[-1] - omega[0])
+
+        # double_lorentzian_model = LorentzianModel(prefix='r0_') + LorentzianModel(prefix='r1_')
+        # pars = double_lorentzian_model.make_params()
+
+        # import matplotlib.pyplot as plt
+
+        # peaks, properties = find_peaks(s_lorentz, omega_mid, height=4, prominence=4)
+        # sigmas = 0.5*scisig.peak_widths(s_lorentz, peaks, rel_height=0.5)[0]*(omega_mid[1]-omega_mid[0])
+        # heights = properties['peak_heights']
+
+        # if len(peaks) == 2:
+        #     pars['r0_amplitude'].set(value=heights[0]*(sigmas[0]*np.pi))
+        #     pars['r1_amplitude'].set(value=heights[1]*(sigmas[1]*np.pi))
+        #     pars['r0_center'].set(value=omega_mid[peaks[0]]+ 10) ### add 10 MHz
+        #     pars['r1_center'].set(value=omega_mid[peaks[1]])
+        #     pars['r0_sigma'].set(value=sigmas[0])
+        #     pars['r1_sigma'].set(value=sigmas[1])
+        # else:
+        #     pars['r0_amplitude'].set(value=heights[0]*(sigmas[0]*np.pi))
+        #     pars['r1_amplitude'].set(value=heights[0]*(sigmas[0]*np.pi))
+        #     pars['r0_center'].set(value=omega_mid[peaks[0]] + 10) 
+        #     pars['r1_center'].set(value=omega_mid[peaks[0]] + 10 + 25) ### add 25 MHz
+        #     pars['r0_sigma'].set(value=sigmas[0]) 
+        #     pars['r1_sigma'].set(value=2*sigmas[0]) # multiply by 2 as filter resonance likely to be much wider
+        
+        # rst = double_lorentzian_model.fit(s_lorentz, x=omega_mid, params=pars)
+
+        # #freq_fit = np.linspace(min(freq), max(freq), fit_slice)
+            
+        # response_fit = rst.eval(params=rst.params, omega=omega)
+        
+        # # plt.plot(omega[:-1], s_lorentz)
+        # # plt.plot(omega[:-1], response_fit)
+        # # plt.show()
+
+        # amp_0 = rst.params['r0_amplitude'].value
+        # mu_0 = rst.params['r0_center'].value
+        # sigma_0 = rst.params['r0_sigma'].value
+        
+        # amp_1 = rst.params['r1_amplitude'].value
+        # mu_1 = rst.params['r1_center'].value
+        # sigma_1 = rst.params['r1_sigma'].value
+
+        # print('omega0:',  pars['r0_center'])
+        # print('omega1:',  pars['r1_center'])
+
+        # ##
+        # omega_l = mu_0
+        # kappa_tot_l = 2*sigma_0
+        # # kappa_ex_l = amp_0*sigma_0/(np.pi*a)/self.reflection_factor
+        # # kappa_in_l = max(0, kappa_tot_r-kappa_ex_r)
+        # omega_h = mu_1
+        # kappa_tot_h = 2*sigma_1
+        # # kappa_ex_h = amp_1*sigma_1/(np.pi*a)/self.reflection_factor
+        # # kappa_in_h = max(0, kappa_tot_p-kappa_ex_p)
+        # ##
+
+        # print('kappa_tot_l, kappa_tot_h:', kappa_tot_l, kappa_tot_h)
+
+        # kappa_p = kappa_tot_l + kappa_tot_h
+        # print('kappa_p:',  kappa_p)
+
+        # omega_middle = (omega[-1] + omega[0])/2
+
+        self.params['g_a'].set(value= a - grad_a_guess*omega_mid, vary = False)
+
+        # print('a - grad_a_guess*omega_middle:', a - grad_a_guess*omega_middle)
+        #input('...')
+        
+        self.params['g_a_grad'].set(value=grad_a_guess, vary=False)
+
+        if fix_electrical_delay:
+            self.params['g_tau'].set(value=0, vary=False)
+        else:
+            self.params['g_tau'].set(value=electrical_delay)
+        self.params['g_theta'].set(value=0, vary = False)
+
+        return self.params
+
+    ## constrain the parameters
+
+    def simultaneous_fit(self, data, omega, params = None, method = 'basinhopping'):
+
+        from lmfit import Minimizer, minimize
+
+        def fit_func(params, i, omega):
+
+            if i == 0:
+                state = 'g'
+            elif i == 1:
+                state = 'e'
+        
+            param_bundles = []
+            
+            for i in range():
+        
+                omega_r = params['{}_omega_r_{}'.format(state, i)].value
+                kappa_in_r = params['{}_kappa_in_r_{}'.format(state, i)].value
+                omega_p = params['{}_omega_p_{}'.format(state, i)].value
+                kappa_in_p = params['{}_kappa_in_p_{}'.format(state, i)].value
+                kappa_p = params['{}_kappa_p_{}'.format(state, i)].value
+                J = params['{}_J_{}'.format(state, i)].value
+                
+                param_bundle = (omega_r, kappa_in_r, omega_p, kappa_in_p, kappa_p, J)
+                param_bundles.append(param_bundle)
+                
+            a = params['{}_a'.format(state)].value
+            a_grad = params['{}_a_grad'.format(state)].value
+            tau = params['{}_tau'.format(state)].value
+            theta = params['{}_theta'.format(state)].value
+                                
+            val = double_resonator_reflection_series_in_parallel(omega, a, a_grad, tau, theta, param_bundles)
+
+            if self.fit_phase_only:
+                val = np.unwrap(np.angle(val))
+
+            return val
+
+        def objective(params, omega, data):
+            """ calculate total residual for fits to several data sets held
+            in a 2-D array, and modeled by Gaussian functions"""
+            ndata, nx = data.shape
+            resid = 0.0*data[:]
+            # make residual per data set
+            
+            for i in range(ndata):
+                    
+                dat = data[i, :]
+                
+                resid[i, :] = dat - fit_func(params, i, omega)
+            # now flatten this to a 1D array, as minimize() needs
+            return np.abs(resid.flatten())
+
+        if params is None:    
+            params = self.self.params
+
+        mini = Minimizer(objective, params, fcn_args=(omega, data))
+        result = minimize(objective, params, args=(omega, data), method = method)
+
+        return result, mini
+
+    def eval(self, omega, params = None):
+        
+        if params is None:    
+            params = self.params
+
+        vals = []
+
+        states = ['g', 'e']
+        
+        param_dict = params.valuesdict()
+
+        for state in states:
+
+            state_param_dict = {key[2:]:value for key, value in param_dict.items() if (state +'_') in key}
+
+            val = double_resonator_reflection_series_in_parallel(omega, **state_param_dict)
             
             if self.fit_phase_only:
                 val = np.unwrap(np.angle(val))
@@ -682,7 +1010,6 @@ class DoubleResonatorReflectionModel_Series_g_e():
             vals.append(val)
 
         return np.array(vals)
-
 class Lorentzian_plus_ConstantModel(lmfit.model.CompositeModel):
     def __init__(self, independent_vars=['x'], prefix='', nan_policy='raise', **kwargs):
         kwargs.update({'prefix': prefix, 'nan_policy': nan_policy, 'independent_vars': independent_vars})
@@ -714,7 +1041,7 @@ class Lorentzian_plus_ConstantModel(lmfit.model.CompositeModel):
         params['c'].set(value=c_init)
         
         return params 
-   
+
 class Exponential_plus_ConstantModel(lmfit.model.CompositeModel):
     def __init__(self, independent_vars=['x'], prefix='', nan_policy='raise', **kwargs):
         kwargs.update({'prefix': prefix, 'nan_policy': nan_policy, 'independent_vars': independent_vars})
@@ -747,7 +1074,6 @@ class Exponential_plus_ConstantModel(lmfit.model.CompositeModel):
         params['decay'].set(value=decay, min=0)
         params.add('c', value=c_init)
         return params
-
 class DampedOscillation_plus_ConstantModel(lmfit.model.CompositeModel):
     def __init__(self, independent_vars=['x'], prefix='', nan_policy='raise', **kwargs):
         kwargs.update({'prefix': prefix, 'nan_policy': nan_policy, 'independent_vars': independent_vars})
