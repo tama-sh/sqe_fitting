@@ -307,7 +307,21 @@ class DoubleResonatorReflectionModel_Parallel(lmfit.model.Model):
 
 def double_resonator_reflection_series(omega, omega_r, kappa_in_r, omega_p, kappa_in_p, kappa_p, J, a, a_grad, tau, theta, reflection_factor=1):
 
+    # parameters:
+    # omega : drive freq
+    # omega_r : readout resonator freq
+    # kappa_in_r : internal decay rate of readout resonator (normally set to zero)
+    # omega_p : filter resonator freq
+    # kappa_in_p : internal decay rate of filter resonator (normally set to zero)
+    # kappa_p : external decay rate of filter resonator
+    # J : coupling strength between readout resonator and filter resonator
+    # a : signal amplitude
+    # a_grad : models a linear frequency dependence to the line attenuation
+    # tau : models the electrical length of the measurement chain
+    # theta : a constant offset to the phase response
+
     val = (a+a_grad*(omega))*np.exp(1j*(theta-omega*tau))*(1+(1j*4*reflection_factor*kappa_p*(omega_r - omega))/(4 * J**2 + (2*-1j*(omega_p - omega) + kappa_p + kappa_in_p) * (2*-1j*(omega_r - omega) + kappa_in_r)))  
+    
     return val
 
 class DoubleResonatorReflectionModel_Series(lmfit.model.Model):
