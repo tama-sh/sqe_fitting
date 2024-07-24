@@ -6,8 +6,13 @@ from .electrical_delay_fitter import (
 )
 from .circle_fitter import algebric_circle_fit
 from .models import (
+    ConstantModel,
+    GaussianModel,
     DampedOscillationModel,
     ResonatorReflectionModel,
+    DoubleResonatorReflectionModel_Parallel,
+    DoubleResonatorReflectionModel_Series,
+    DoubleResonatorReflectionModel_Series_g_e,
     Lorentzian_plus_ConstantModel,
     Exponential_plus_ConstantModel,
     DampedOscillation_plus_ConstantModel

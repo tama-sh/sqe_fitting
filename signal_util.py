@@ -66,6 +66,26 @@ def group_delay(cplx: np.ndarray, omega: np.ndarray):
     """
     return -np.imag(derivative(cplx, omega)/middle_points(cplx))
 
+def group_delay_smoothed(cmplx: np.ndarray, omega: np.ndarray, smoothing = 10):
+    """Calculate smoothed group delay 
+    Use smoothed unwrapped phase
+
+    Args:
+        cplx (np.ndarray): complex data with electrical delay
+        omega (np.ndarray): angular frequency
+        
+    Returns:
+        tuple: (np.ndarray: smoothed frequencies, np.ndarray: smoothed group delay)
+    """
+    phase = np.unwrap(np.angle(cmplx))
+    phase_ave = np.convolve(phase, np.ones(smoothing), mode='valid') / smoothing
+    phase_diff = phase_ave[1:]-phase_ave[:-1]
+    smoothed_freqs = omega[int(smoothing/2):-int(smoothing/2)]
+    freq_diff = smoothed_freqs[1]-smoothed_freqs[0]
+    delay = - phase_diff / freq_diff
+
+    return smoothed_freqs, delay
+
 def find_peaks(data, x=1., height=None, distance=None, prominence=None, width=None, **kwargs):
     """Find peaks from data, wrapper function of scipy.signal.find_peaks
     Return values are same as scipy.signal.find_peaks
