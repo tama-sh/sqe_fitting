@@ -14,5 +14,5 @@ dependencies = [
     "numpy",
     "scipy",
     "matplotlib",
-	"lmfit"
+    "lmfit"
 ]
