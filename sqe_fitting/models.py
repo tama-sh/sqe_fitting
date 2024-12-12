@@ -110,6 +110,10 @@ class PolarWeightModel(lmfit.model.Model):
         """Return the residual.
         Weight is applyed for amplitude (real part) and phase (imaginary part) direction based.
         This is done by rotating the diff by the phase of the model
+        
+        Note that when you want to fit only with phase you can use weight = 1j.
+        However, it makes the local minima where model and data has exact pi phase difference.
+        You can avoid this kind of local minima by setting small real weight like weight = 0.1 + 1j
         """
         if not np.issubdtype(data.dtype, np.complexfloating): # "diff.dtype is complex" in lmfit was not working well for complex128
             raise ValueError("The data type should be complex.")
