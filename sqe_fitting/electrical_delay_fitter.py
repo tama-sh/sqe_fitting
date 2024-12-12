@@ -3,7 +3,7 @@ from typing import Tuple
 import numpy as np
 import lmfit
 from .util import percentile_range_data
-from .signal_util import group_delay, smoothen
+from .signal_util import group_delay, extract_edge_data, middle_points
 from .circle_fitter import algebric_circle_fit
 
 def correct_electrical_delay(cplx: np.ndarray, omega: np.ndarray, electrical_delay=None, phase_offset=None, phase_auto_correct=False):
@@ -58,6 +58,12 @@ def estimate_electrical_delay_from_group_delay(cplx: np.ndarray, omega: np.ndarr
     """
     delay = group_delay(cplx, omega)
     return np.mean(percentile_range_data(delay, percentile_range))
+
+def estimate_electrical_delay_from_edge_delay(cplx: np.ndarray, omega: np.ndarray, edge_width, edge_side='both'):
+    delay = group_delay(cplx, omega)
+    omega_m = middle_points(omega)
+    edge_delay, _ = extract_edge_data(delay, omega_m, edge_width=edge_width, edge_side='both')
+    return np.mean(edge_delay)
 
 def estimate_electrical_delay_circle_fit(cplx: np.ndarray, omega: np.ndarray, electrical_delay_init=0, return_minimizer_result=False):
     """Estimate electridal delay from algebric circle fit

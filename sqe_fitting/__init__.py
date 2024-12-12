@@ -2,7 +2,8 @@ from .electrical_delay_fitter import (
     correct_electrical_delay,
     estimate_electrical_delay_unwrap,
     estimate_electrical_delay_from_group_delay,
-    estimate_electrical_delay_resonator
+    estimate_electrical_delay_resonator,
+    estimate_electrical_delay_from_edge_delay
 )
 from .circle_fitter import algebric_circle_fit
 from .models import (
@@ -10,7 +11,8 @@ from .models import (
     ResonatorReflectionModel,
     Lorentzian_plus_ConstantModel,
     Exponential_plus_ConstantModel,
-    DampedOscillation_plus_ConstantModel
+    DampedOscillation_plus_ConstantModel,
+    ResonatorFilterReflectionModel
 )
 
 from .plot_util import plot_Sparameter
