@@ -1,6 +1,12 @@
 from typing import Tuple
 import numpy as np
 
+def intersect_indices(array1, array2):
+    intersection = np.intersect1d(array1, array2)
+    indices_array1 = np.where(np.isin(array1, intersection))[0]
+    indices_array2 = np.where(np.isin(array2, intersection))[0]
+    return indices_array1, indices_array2
+
 def percentile_range_indices(data: np.ndarray, percentile_rage: Tuple[float, float]):
     """Return indices of 1d array in a range of percentile 
     

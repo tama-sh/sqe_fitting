@@ -1,7 +1,8 @@
 import numpy as np
 import scipy.signal as scisig
 from copy import deepcopy
-from .util import percentile_range_data
+from .util import intersect_indices
+from scipy.interpolate import UnivariateSpline
 
 def smoothen(data: np.ndarray, t = 1, numtaps: int = 11, smoothing_width: float = 10):
     """Smoothen the data by applying fir filter with zero phase.
@@ -66,44 +67,91 @@ def group_delay(cplx: np.ndarray, omega: np.ndarray):
     """
     return -np.imag(derivative(cplx, omega)/middle_points(cplx))
 
-def find_peaks(data, x=1., height=None, distance=None, prominence=None, width=None, **kwargs):
+def extract_edge_data(data, x=None, edge_width=None, edge_side='both'):
+    if x is None:
+        x = np.arange(0, len(data))
+    if edge_width is None:
+        edge_width = 0.1*(x[-1]-x[0]) # 10% of data are userd as edge
+    
+    if edge_side == 'both':
+        if np.isscalar(edge_width):
+            edge_width = np.array([edge_width]*2)
+        else:
+            edge_width = np.array(edge_width)
+    
+        left_data_indices = np.where(x <= x[0]+edge_width[0])[0]
+        right_data_indices = np.where(x >= x[-1]-edge_width[1])[0]
+        edge_x = np.concatenate([x[left_data_indices], x[right_data_indices]])
+        edge_data = np.concatenate([data[left_data_indices], data[right_data_indices]])
+    elif edge_side == 'left':
+        left_data_indices = np.where(x <= x[0]+edge_width)[0]
+        edge_x = x[left_data_indices]
+        edge_data = data[left_data_indices]
+    elif edge_side == 'right':
+        right_data_indices = np.where(x >= x[-1]-edge_width)[0]
+        edge_x = x[right_data_indices]
+        edge_data = data[right_data_indices]
+    else:
+        raise ValueError("edge_side must be 'left', 'right' or 'both.")
+    return edge_data, edge_x
+
+def fit_background_at_edge(data, x=None, edge_width=None, edge_side='both'):
+    edge_data, edge_x = extract_edge_data(data, x=x, edge_width=edge_width, edge_side=edge_side)
+    spline = UnivariateSpline(edge_x, edge_data)
+    return spline
+
+def estimate_background_noise_from_edge(data, x=None, edge_width=None, edge_side='both'):
+    edge_data, edge_x = extract_edge_data(data, x=x, edge_width=edge_width, edge_side=edge_side)
+    spline = UnivariateSpline(edge_x, edge_data)
+    sigma = np.sqrt(np.mean((edge_data - spline(edge_x))**2))
+    mu = np.mean(edge_data)
+    return mu, sigma
+
+def find_peaks(data, x=1., height=None, distance=None, prominence=None, width=None, background_edge_width=None, **kwargs):
     """Find peaks from data, wrapper function of scipy.signal.find_peaks
     Return values are same as scipy.signal.find_peaks
     
     Args:
         data (np.ndarray): Data with peaks
         x (np.ndarray): x-axis of data
-        height (float): Threshold of height in the unit of standard deviation of baseline noise (e.g. height=10 means that peak larger than 10\sigma from baseline would be detected)
+        height (float): Threshold of height normalized baseline noise (e.g. height=10 means that peak larger than 10\sigma from baseline would be detected)
         distance (float): Minimum distance between the peaks, distance in the same unit of frequency
+        prominence (float): Prominence normalized by normalized by baseline_noise
+        width: Peak width
+        background_edge_width: The width of edge used for background noise estimation
         kwargs: other key-word arguments to be passed to scipy.signal.find_peaks
     Returns:
         peaks (np.ndarray): peak indices
         properties (dict): properties of peaks
     """
-    baseline_data = percentile_range_data(data, (0, 0.5)) # baseline estimation by using 0-0.5 percentile of data
-    mu = np.mean(baseline_data)
-    sigma = np.sqrt(np.mean(baseline_data**2)-mu**2)
-    
-    if height is None:
-        height_scipy = None
-    elif isinstance(height, (float, int)) or isinstance(height, np.ndarray):
-        height_scipy = mu + height*sigma
-    else:
-        height_scipy = [mu + h*sigma for h in height]
-        
-    if prominence is None:
-        prominence_scipy = None
-    elif isinstance(height, (float, int)) or isinstance(prominence, np.ndarray):
-        prominence_scipy = prominence*sigma
-    else:
-        prominence_scipy = [p*sigma for p in prominence]
-        
     if isinstance(x, np.ndarray):
         dx = x[1] - x[0]
     elif isinstance(x, (float, int)):
         dx = x
     else:
         raise ValueError('x should be either np.ndarray or float')
+    
+    if background_edge_width is None:
+        default_edge_data_ratio = 10
+        background_edge_width = len(data)//default_edge_data_ratio
+    else:
+        background_edge_width = background_edge_width//dx
+    mu, sigma = estimate_background_noise_from_edge(data, edge_width=background_edge_width)
+    
+    if height is None:
+        height_scipy = None
+    elif np.isscalar(height):
+        height_scipy = mu + height*sigma
+    else:
+        height_scipy = [mu + h*sigma for h in height]
+        
+    if prominence is None:
+        prominence_scipy = None
+    elif np.isscalar(prominence):
+        prominence_scipy = prominence*sigma
+    else:
+        prominence_scipy = [p*sigma for p in prominence]
+
     if distance is None:
         distance_scipy = None
     else:
@@ -222,3 +270,36 @@ def guess_linewidth_from_peak(freq, data, r=2):
     r = ptp/(data[idx_c]-0.5*(data[idx_l-1]+data[idx_r+1]))
     return np.sqrt(r-1)*(freq[idx_r+1] - freq[idx_l-1])/2
 
+def estimate_phase_offset(freq1, freq2, cplx1, cplx2):
+    idx1, idx2 = intersect_indices(freq1, freq2)
+    theta21 = np.angle(np.mean(cplx2[idx2]*np.conj(cplx1[idx1])))
+    return theta21
+
+def combine_sparameter_with_phase_offset(freq_list, cplx_list, is_offset_equal=False):
+    phase_diff_list = []
+    for i in range(len(freq_list)-1):
+        freq1 = freq_list[i]
+        freq2 = freq_list[i+1]
+        cplx1 = cplx_list[i]
+        cplx2 = cplx_list[i+1]
+        phase21 = estimate_phase_offset(freq1, freq2, cplx1, cplx2)
+        phase_diff_list.append(phase21)
+    if is_offset_equal:
+        phase_offset = np.cumsum([np.mean(phase_diff_list)]*len(phase_diff_list))
+    else:
+        phase_offset = np.cumsum(phase_diff_list)
+           
+    freq_combined = freq_list[0]
+    cplx_combined = cplx_list[0].copy()
+
+    for i in range(1, len(freq_list)):
+        freq_current = freq_list[i]
+        cplx_current = cplx_list[i]*np.exp(-1j*phase_offset[i-1])
+        idx_combined, idx_current = intersect_indices(freq_combined, freq_current)
+        cplx_intersect = 0.5*(cplx_combined[idx_combined]+cplx_current[idx_current])
+        cplx_combined[idx_combined] = cplx_intersect
+        
+        non_overlap_freq = np.setdiff1d(freq_current, freq_combined)
+        freq_combined = np.concatenate((freq_combined, non_overlap_freq))
+        cplx_combined = np.concatenate((cplx_combined, cplx_current[np.isin(freq_current, non_overlap_freq)]))
+    return freq_combined, cplx_combined
