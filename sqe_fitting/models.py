@@ -1,6 +1,8 @@
 import numpy as np
 import operator
 import lmfit 
+from functools import reduce
+import inspect
 
 from lmfit.models import (
     LorentzianModel,
@@ -23,6 +25,26 @@ import scipy.signal as scisig
 def damped_oscillation(x, amplitude, decay, frequency, phase):
     return amplitude*np.exp(-x/decay)*np.cos(2*np.pi*frequency*x + phase)
 
+def electrical_delay(omega, tau, theta):
+    """Frequency-dependent phase caused by electrical delay
+    
+    Args:
+        omega: frequency, independent value
+        tau: electrical delay
+        theta: phase offset
+    """
+    return np.exp(1j*(theta-omega*tau))
+
+def cable_attenuation(omega, attn_coeff):
+    """Frequency-dependent loss of coaxial cable
+    The loss of the coaxial cable normaly depend like
+    * attn (dB) = attn_coeff*sqrt(f)
+    """
+    return 10**(-attn_coeff*np.sqrt(omega)/10)
+
+def resonator_reflection_base(omega, omega_0, kappa_ex, kappa_in, phi, reflection_factor=1):
+    return 1-(reflection_factor*kappa_ex*np.exp(1j*phi))/(0.5*kappa_ex+kappa_in+1j*(omega-omega_0))
+
 def resonator_reflection(omega, omega_0, kappa_ex, kappa_in, a, tau, theta, phi, reflection_factor=1):
     """Frequency-dependent referection form a resonator
     Note that the function is written by using the unit of imaginary number 'j', instead of 'i' in quantum mechanics.
@@ -39,7 +61,7 @@ def resonator_reflection(omega, omega_0, kappa_ex, kappa_in, a, tau, theta, phi,
         phi: tilt angle of the circle fits
         reflection_factor: 1 for normal reflection, 0.5 for hanger
     """
-    return a*np.exp(1j*(theta-omega*tau))*(1-(reflection_factor*2*kappa_ex*np.exp(1j*phi))/(kappa_ex+kappa_in+2j*(omega-omega_0)))
+    return a*electrical_delay(omega, tau, theta)*resonator_reflection_base(omega, omega_0, kappa_ex, kappa_in, phi, reflection_factor)
 
 class DampedOscillationModel(lmfit.model.Model):
     def __init__(self, independent_vars=['x'], prefix='', nan_policy='raise', **kwargs):
@@ -80,10 +102,52 @@ class DampedOscillationModel(lmfit.model.Model):
         
         return pars
 
-class ResonatorReflectionModel(lmfit.model.Model):
+class PolarWeightModel(lmfit.model.Model):
+    def __init__(self, func, independent_vars=None, param_names=None, nan_policy='raise', prefix='', name=None, **kws):
+        super().__init__(func, independent_vars, param_names, nan_policy, prefix, name, **kws)
+
+    def _residual(self, params, data, weights, **kwargs):
+        """Return the residual.
+        Weight is applyed for amplitude (real part) and phase (imaginary part) direction based.
+        This is done by rotating the diff by the phase of the model
+        """
+        if not np.issubdtype(data.dtype, np.complexfloating): # "diff.dtype is complex" in lmfit was not working well for complex128
+            raise ValueError("The data type should be complex.")
+
+        model = self.eval(params, **kwargs)
+        if self.nan_policy == 'raise' and not np.all(np.isfinite(model)):
+            msg = ('The model function generated NaN values and the fit '
+                   'aborted! Please check your model function and/or set '
+                   'boundaries on parameters where applicable. In cases like '
+                   'this, using "nan_policy=\'omit\'" will probably not work.')
+            raise ValueError(msg)
+
+        diff = data - model
+
+        model_is_zero = (model == 0)
+        rotation_factors = np.where(
+            np.invert(model_is_zero),  # If model is not zero
+            np.conj(model) / np.abs(model),  # Normal rotation factor
+            1  # Use a default factor of 1
+        )
+        diff = diff * rotation_factors
+        diff = diff.ravel().view(float)
+
+        if weights is not None:
+            if np.isscalar(weights): 
+                weights = np.full(len(data), weights, dtype=complex)
+            if np.iscomplexobj(weights): # in lmfit.model they are using "if weights.dtype is complex" but it returns False for complex128 type
+                # weights are complex
+                weights = weights.ravel().view(float)
+            else:
+                # real weights but complex data
+                weights = weights.astype(complex).ravel().view(float)
+            diff *= weights
+        return diff
+
+class ResonatorReflectionModel(PolarWeightModel):
     def __init__(self, independent_vars=['omega'], prefix='', nan_policy='raise', reflection_type='normal', **kwargs):
-        kwargs.update({'prefix': prefix, 'nan_policy': nan_policy,
-                       'independent_vars': independent_vars})
+        kwargs.update({'prefix': prefix, 'nan_policy': nan_policy, 'independent_vars': independent_vars})
         if reflection_type == 'normal':
             self.reflection_type = reflection_type
             self.reflection_factor = 1
@@ -167,14 +231,71 @@ class ResonatorReflectionModel(lmfit.model.Model):
         
         return update_param_vals(pars, self.prefix, **kwargs)
 
-def double_resonator_reflection(omega, omega_0, kappa_ex_0, kappa_in_0, phi_0, omega_1, kappa_ex_1, kappa_in_1, phi_1, a, tau, theta, reflection_factor=1):
-    return a*np.exp(1j*(theta-omega*tau))*(1-(reflection_factor*2*kappa_ex_0*np.exp(1j*phi_0))/(kappa_ex_0+kappa_in_0+2j*(omega-omega_0))
-                                            -(reflection_factor*2*kappa_ex_1*np.exp(1j*phi_1))/(kappa_ex_1+kappa_in_1+2j*(omega-omega_1)))
+def s2y(s, z0=50):
+    return (1-s)/(1+s)/z0
 
-class DoubleResonatorReflectionModel(lmfit.model.Model):
-    def __init__(self, independent_vars=['omega'], prefix='', nan_policy='raise', reflection_type='normal', **kwargs):
-        kwargs.update({'prefix': prefix, 'nan_policy': nan_policy,
-                       'independent_vars': independent_vars})
+def y2s(y, z0=50):
+    return (1-y*z0)/(1+y*z0)
+
+def parallel_sparameter(s_func_list):
+    """Return parallel sparametr function
+    
+    Each s_func should have "omega" variable as the first argument.
+    The parameter name for each s_func replaced with the one with prefix, like amplitude -> e0_amplitude where e0 means element 0.
+    As lmfit.model.Model parse the arguments by using inspect.signature, this function set the __signature__ attribute.
+    """
+    kwmap_list = []
+    new_parameters = [inspect.Parameter("omega", inspect.Parameter.POSITIONAL_OR_KEYWORD)]
+    for k, s_func in enumerate(s_func_list):
+        sig = inspect.signature(s_func)
+        parameters = sig.parameters
+        kwmap = {f"e{k}_{param}": param for param in parameters if param != 'omega'}
+        kwmap_list.append(kwmap)
+        new_parameters.extend([inspect.Parameter(param, inspect.Parameter.POSITIONAL_OR_KEYWORD) for param in kwmap])
+    
+    def paralell_s_func(omega, **kwargs):
+        y_list = []
+        for k, s_func in enumerate(s_func_list):
+            kwargs_each = {}
+            for kw in kwmap_list[k]:
+                kw_org = kwmap_list[k][kw]
+                kw_val = kwargs.get(kw)
+                kwargs_each[kw_org] = kw_val
+            s = s_func(omega, **kwargs_each)
+            y = s2y(s)
+            y_list.append(y)
+        y_tot = reduce(operator.add, y_list)  # add up the admittances and convert back to the s parameter to calculate parallelly connected response.
+        s_tot = y2s(y_tot)
+        return s_tot   
+    
+    paralell_s_func.__signature__ = inspect.Signature(new_parameters)
+    
+    return paralell_s_func
+
+def with_cable(s_func):
+    def s_func_with_cable(omega, **kwargs):
+        a = kwargs.get('a')
+        attn_coeff = kwargs.get('attn_coeff')
+        tau = kwargs.get('tau')
+        theta = kwargs.get('theta')
+        return a*cable_attenuation(omega, attn_coeff)*electrical_delay(omega, tau, theta)*s_func(omega, **kwargs)
+    sig = inspect.signature(s_func)
+    parameters = list(sig.parameters.values())
+    parameters.append(inspect.Parameter('a', inspect.Parameter.POSITIONAL_OR_KEYWORD))
+    parameters.append(inspect.Parameter('attn_coeff', inspect.Parameter.POSITIONAL_OR_KEYWORD))
+    parameters.append(inspect.Parameter('tau', inspect.Parameter.POSITIONAL_OR_KEYWORD))
+    parameters.append(inspect.Parameter('theta', inspect.Parameter.POSITIONAL_OR_KEYWORD))
+    new_sig = inspect.Signature(parameters)
+    s_func_with_cable.__signature__ = new_sig
+    return s_func_with_cable
+
+class ParallelResonatorReflectionModel(PolarWeightModel):
+    def __init__(self, n_resonators, independent_vars=['omega'], prefix='', nan_policy='raise', reflection_type='normal', with_cable_attn_coeff=False, **kwargs):
+        """
+        Args
+            n: number of resonators
+        """
+        kwargs.update({'prefix': prefix, 'nan_policy': nan_policy, 'independent_vars': independent_vars})
         if reflection_type == 'normal':
             self.reflection_type = reflection_type
             self.reflection_factor = 1
@@ -183,92 +304,111 @@ class DoubleResonatorReflectionModel(lmfit.model.Model):
             self.reflection_factor = 0.5
         else:
             raise ValueError(f"Reflection type '{reflection_type}' is not supprted")
-        super().__init__(double_resonator_reflection, **kwargs)
+        
+        self.with_cable_attn_coeff = with_cable_attn_coeff
+        self.n_resonators = n_resonators
+        s_func_list = [resonator_reflection_base]*self.n_resonators
+        parallel_s_func = parallel_sparameter(s_func_list)
+        parallel_s_func_with_cable = with_cable(parallel_s_func)
+        super().__init__(parallel_s_func_with_cable, **kwargs)
         self._set_paramhints_prefix()
     
     def _set_paramhints_prefix(self):
-        self.set_param_hint('kappa_ex_0', min=0)
-        self.set_param_hint('kappa_in_0', min=0)
-        self.set_param_hint('kappa_ex_1', min=0)
-        self.set_param_hint('kappa_in_1', min=0)
+        for k in range(self.n_resonators):
+            self.set_param_hint(f'e{k}_kappa_ex', min=0)
+            self.set_param_hint(f'e{k}_kappa_in', min=0)
+            self.set_param_hint(f'e{k}_reflection_factor', value=self.reflection_factor, vary=False)
+        
+        self.set_param_hint('a', min=0)
+        if self.with_cable_attn_coeff:
+            self.set_param_hint('attn_coeff', min=0)
+        else:
+            self.set_param_hint('attn_coeff', value=0, vary=False)
+
+def resonator_filter_reflection_base(omega, omega_r, kappa_in_r, omega_p, kappa_in_p, kappa_p, J, phi, reflection_factor=1):
+    # parameters:
+    # omega : drive freq
+    # omega_r : readout resonator freq
+    # kappa_in_r : internal decay rate of readout resonator (normally set to zero)
+    # omega_p : filter resonator freq
+    # kappa_in_p : internal decay rate of filter resonator (normally set to zero)
+    # kappa_p : external decay rate of filter resonator
+    # J : coupling strength between readout resonator and filter resonator
+    # phi: reflection phase offset
+    # reflection_factor: 1 for normal reflection, 1/2 for hanger type resonator
+    return 1-reflection_factor*np.exp(1j*phi)*kappa_p*(0.5*kappa_in_r + 1j*(omega - omega_r))/((0.5*kappa_p + 0.5*kappa_in_p + 1j*(omega - omega_p)) * (0.5*kappa_in_r + 1j*(omega - omega_r)) + J**2)
+
+def resonator_filter_reflection(omega, omega_r, kappa_in_r, omega_p, kappa_in_p, kappa_p, J, a, attn_coeff, tau, theta, phi, reflection_factor=1):
+    return a*cable_attenuation(omega, attn_coeff)*electrical_delay(omega, tau, theta)*resonator_filter_reflection_base(omega, omega_r, kappa_in_r, omega_p, kappa_in_p, kappa_p, J, phi, reflection_factor)
+
+class ResonatorFilterReflectionModel(PolarWeightModel):
+    def __init__(self, independent_vars=['omega'], prefix='', nan_policy='raise', reflection_type='normal', with_cable_attn_coeff=False, **kwargs):
+        """
+        Args
+            n: number of resonators
+        """
+        kwargs.update({'prefix': prefix, 'nan_policy': nan_policy, 'independent_vars': independent_vars})
+        if reflection_type == 'normal':
+            self.reflection_type = reflection_type
+            self.reflection_factor = 1
+        elif reflection_type == 'hanger':
+            self.reflection_type = reflection_type
+            self.reflection_factor = 0.5
+        else:
+            raise ValueError(f"Reflection type '{reflection_type}' is not supprted")
+        
+        self.with_cable_attn_coeff=with_cable_attn_coeff
+        super().__init__(resonator_filter_reflection, **kwargs)
+        self._set_paramhints_prefix()
+
+    def _set_paramhints_prefix(self):
+        self.set_param_hint('kappa_p', min=0)
+        self.set_param_hint('kappa_in_p', min=0)
+        self.set_param_hint('kappa_in_r', min=0)
         self.set_param_hint('a', min=0)
         self.set_param_hint('reflection_factor', value=self.reflection_factor, vary=False)
-        
-    def guess(self, cplx, omega, smoothing_width=10, fix_electrical_delay=True, **kwargs):
-        pars = self.make_params()
-        
-        electrical_delay = estimate_electrical_delay_unwrap(cplx, omega, accumulated_phase=-4*np.pi)
-        cplx_c = correct_electrical_delay(cplx, omega, electrical_delay)
-
-        # estimate amplitude baseline
-        a = np.mean(percentile_range_data(abs(cplx_c), (0.75, 1)))
-        
-        # derivative-based guess
-        omega_mid = middle_points(omega)
-        cplx_lp = smoothen(cplx_c, smoothing_width=smoothing_width)
-        s_lorentz = np.abs(derivative(cplx_lp, omega)) # this derivative should be Lorentzian if electrical delay is well calibrated
-        
-        double_lorentzian_model = LorentzianModel(prefix='r0_') + LorentzianModel(prefix='r1_')
-        pars = double_lorentzian_model.make_params()
-        
-        peaks, properties = find_peaks(s_lorentz, omega_mid, height=10, prominence=10)
-        sigmas = 0.5*scisig.peak_widths(s_lorentz, peaks, rel_height=0.5)[0]*(omega_mid[1]-omega_mid[0])
-        heights = properties['peak_heights']
-        
-        if len(peaks) == 2:
-            pars['r0_amplitude'].set(value=heights[0]*(sigmas[0]*np.pi))
-            pars['r1_amplitude'].set(value=heights[1]*(sigmas[1]*np.pi))
-            pars['r0_center'].set(value=omega_mid[peaks[0]]) 
-            pars['r1_center'].set(value=omega_mid[peaks[1]])
-            pars['r0_sigma'].set(value=sigmas[0])
-            pars['r1_sigma'].set(value=sigmas[1])
+        if self.with_cable_attn_coeff:
+            self.set_param_hint('attn_coeff', min=0)
         else:
-            pars['r0_amplitude'].set(value=heights[0]*(sigmas[0]*np.pi))
-            pars['r1_amplitude'].set(value=heights[0]*(sigmas[0]*np.pi))
-            pars['r0_center'].set(value=omega_mid[peaks[0]]) 
-            pars['r1_center'].set(value=omega_mid[peaks[0]])
-            pars['r0_sigma'].set(value=sigmas[0])
-            pars['r1_sigma'].set(value=sigmas[0])
-        
-        rst = double_lorentzian_model.fit(s_lorentz, x=omega_mid, params=pars)
-        
-        amp_0 = rst.params['r0_amplitude'].value
-        mu_0 = rst.params['r0_center'].value
-        sigma_0 = rst.params['r0_sigma'].value
-        
-        amp_1 = rst.params['r1_amplitude'].value
-        mu_1 = rst.params['r1_center'].value
-        sigma_1 = rst.params['r1_sigma'].value
-        
-        omega_0 = mu_0
-        kappa_tot_0 = 2*sigma_0
-        kappa_ex_0 = amp_0*sigma_0/(np.pi*a)/self.reflection_factor
-        kappa_in_0 = max(0, kappa_tot_0-kappa_ex_0)
-        omega_1 = mu_1
-        kappa_tot_1 = 2*sigma_1
-        kappa_ex_1 = amp_1*sigma_1/(np.pi*a)/self.reflection_factor
-        kappa_in_1 = max(0, kappa_tot_1-kappa_ex_1)
-        
-        # parepare parameters
-        pars = self.make_params()
-        pars['a'].set(value=a)
-        pars['omega_0'].set(value=omega_0)
-        pars['kappa_ex_0'].set(value=kappa_ex_0)
-        pars['kappa_in_0'].set(value=kappa_in_0)
-        pars['omega_1'].set(value=omega_1)
-        pars['kappa_ex_1'].set(value=kappa_ex_1)
-        pars['kappa_in_1'].set(value=kappa_in_1)   
-        pars['phi_0'].set(value=0)
-        pars['phi_1'].set(value=0)
-        
-        if fix_electrical_delay:
-            pars['tau'].set(value=0, vary=False)
-        else:
-            pars['tau'].set(value=electrical_delay)
-        pars['theta'].set(value=0)
+            self.set_param_hint('attn_coeff', value=0, vary=False)
 
-        return update_param_vals(pars, self.prefix, **kwargs)
+class ParallelResonatorFilterReflectionModel(PolarWeightModel):
+    def __init__(self, n_resonators, independent_vars=['omega'], prefix='', nan_policy='raise', reflection_type='normal', with_cable_attn_coeff=False, **kwargs):
+        """
+        Args
+            n: number of resonators
+        """
+        kwargs.update({'prefix': prefix, 'nan_policy': nan_policy, 'independent_vars': independent_vars})
+        if reflection_type == 'normal':
+            self.reflection_type = reflection_type
+            self.reflection_factor = 1
+        elif reflection_type == 'hanger':
+            self.reflection_type = reflection_type
+            self.reflection_factor = 0.5
+        else:
+            raise ValueError(f"Reflection type '{reflection_type}' is not supprted")
+        
+        self.with_cable_attn_coeff = with_cable_attn_coeff
+        self.n_resonators = n_resonators
+        s_func_list = [resonator_filter_reflection_base]*self.n_resonators
+        parallel_s_func = parallel_sparameter(s_func_list)
+        parallel_s_func_with_cable = with_cable(parallel_s_func)
+        super().__init__(parallel_s_func_with_cable, **kwargs)
+        self._set_paramhints_prefix()
     
+    def _set_paramhints_prefix(self):
+        for k in range(self.n_resonators):
+            self.set_param_hint(f'e{k}_kappa_p', min=0)
+            self.set_param_hint(f'e{k}_kappa_in_p', min=0)
+            self.set_param_hint(f'e{k}_kappa_in_r', min=0)
+            self.set_param_hint(f'e{k}_reflection_factor', value=self.reflection_factor, vary=False)
+        
+        self.set_param_hint('a', min=0)
+        if self.with_cable_attn_coeff:
+            self.set_param_hint('attn_coeff', min=0)
+        else:
+            self.set_param_hint('attn_coeff', value=0, vary=False)
+
 # Composite models
 class Lorentzian_plus_ConstantModel(lmfit.model.CompositeModel):
     def __init__(self, independent_vars=['x'], prefix='', nan_policy='raise', **kwargs):
