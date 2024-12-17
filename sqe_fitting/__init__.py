@@ -9,10 +9,13 @@ from .circle_fitter import algebric_circle_fit
 from .models import (
     DampedOscillationModel,
     ResonatorReflectionModel,
+    ResonatorFilterReflectionModel,
+    ParallelResonatorReflectionModel,
+    ParallelResonatorFilterReflectionModel,
+    ParallelResonatorFilterReflectionModel_with_Shunt,
     Lorentzian_plus_ConstantModel,
     Exponential_plus_ConstantModel,
-    DampedOscillation_plus_ConstantModel,
-    ResonatorFilterReflectionModel
+    DampedOscillation_plus_ConstantModel
 )
 
 from .plot_util import plot_Sparameter

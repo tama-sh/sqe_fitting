@@ -126,8 +126,10 @@ def find_peaks(data, x=1., height=None, distance=None, prominence=None, width=No
     """
     if isinstance(x, np.ndarray):
         dx = x[1] - x[0]
+        xmin = x[0]
     elif isinstance(x, (float, int)):
         dx = x
+        xmin = 0
     else:
         raise ValueError('x should be either np.ndarray or float')
     
@@ -163,6 +165,21 @@ def find_peaks(data, x=1., height=None, distance=None, prominence=None, width=No
     
     kwargs.update({'height': height_scipy, 'distance': distance_scipy, 'prominence': prominence_scipy, 'width': width_scipy})
     peaks, properties = scisig.find_peaks(data, **kwargs)
+    
+    properties['baseline_noise'] = sigma
+    properties['baseline_offset'] = mu
+    if height_scipy is not None:
+        properties['normalized_peak_heights'] = (properties['peak_heights']-mu)/sigma
+    if prominence_scipy is not None:
+        properties['normalized_prominences'] = properties['prominences']/sigma
+        properties['x_left_bases'] = xmin+properties['left_bases']*dx
+        properties['x_right_bases'] = xmin+properties['right_bases']*dx
+    if width_scipy is not None:
+        properties['x_widths'] = properties['widths']*dx
+        properties['normalized_width_heights'] = (properties['width_heights']-mu)/sigma
+        properties['x_left_ips'] = xmin+properties['left_ips']*dx
+        properties['x_right_ips'] = xmin+properties['right_ips']*dx
+    
     return peaks, properties
 
 def find_major_axis(cplx: np.ndarray):

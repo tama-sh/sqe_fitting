@@ -413,6 +413,51 @@ class ParallelResonatorFilterReflectionModel(PolarWeightModel):
         else:
             self.set_param_hint('attn_coeff', value=0, vary=False)
 
+def s_LC_shunt(omega, omega_0, z0_LC):
+    y = (1j/z0_LC)*((omega/omega_0) - (omega_0/omega))
+    s = y2s(y)
+    return s
+
+class ParallelResonatorFilterReflectionModel_with_Shunt(PolarWeightModel):
+    def __init__(self, n_resonators, independent_vars=['omega'], prefix='', nan_policy='raise', reflection_type='normal', with_cable_attn_coeff=False, shunt_s_func=None, **kwargs):
+        """
+        Args
+            n: number of resonators
+        """
+        kwargs.update({'prefix': prefix, 'nan_policy': nan_policy, 'independent_vars': independent_vars})
+        if reflection_type == 'normal':
+            self.reflection_type = reflection_type
+            self.reflection_factor = 1
+        elif reflection_type == 'hanger':
+            self.reflection_type = reflection_type
+            self.reflection_factor = 0.5
+        else:
+            raise ValueError(f"Reflection type '{reflection_type}' is not supprted")
+        
+        if shunt_s_func is None:
+            shunt_s_func = s_LC_shunt
+
+        self.with_cable_attn_coeff = with_cable_attn_coeff
+        self.n_resonators = n_resonators
+        s_func_list = [resonator_filter_reflection_base]*self.n_resonators + [shunt_s_func]
+        parallel_s_func = parallel_sparameter(s_func_list)
+        parallel_s_func_with_cable = with_cable(parallel_s_func)
+        super().__init__(parallel_s_func_with_cable, **kwargs)
+        self._set_paramhints_prefix()
+    
+    def _set_paramhints_prefix(self):
+        for k in range(self.n_resonators):
+            self.set_param_hint(f'e{k}_kappa_p', min=0)
+            self.set_param_hint(f'e{k}_kappa_in_p', min=0)
+            self.set_param_hint(f'e{k}_kappa_in_r', min=0)
+            self.set_param_hint(f'e{k}_reflection_factor', value=self.reflection_factor, vary=False)
+        
+        self.set_param_hint('a', min=0)
+        if self.with_cable_attn_coeff:
+            self.set_param_hint('attn_coeff', min=0)
+        else:
+            self.set_param_hint('attn_coeff', value=0, vary=False)
+
 # Composite models
 class Lorentzian_plus_ConstantModel(lmfit.model.CompositeModel):
     def __init__(self, independent_vars=['x'], prefix='', nan_policy='raise', **kwargs):
