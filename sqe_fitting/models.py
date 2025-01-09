@@ -128,16 +128,16 @@ class PolarWeightModel(lmfit.model.Model):
 
         diff = data - model
 
-        model_is_zero = (model == 0)
-        rotation_factors = np.where(
-            np.invert(model_is_zero),  # If model is not zero
-            np.conj(model) / np.abs(model),  # Normal rotation factor
-            1  # Use a default factor of 1
-        )
-        diff = diff * rotation_factors
-        diff = diff.ravel().view(float)
-
         if weights is not None:
+            model_is_zero = (model == 0)
+            rotation_factors = np.where(
+                model_is_zero,  # If model is zero
+                1,  # Use a default factor of 1
+                np.conj(model) / np.abs(model)  # rotate model data on the real axis
+            )
+            diff = diff * rotation_factors
+            diff = diff.ravel().view(float)
+
             if np.isscalar(weights): 
                 weights = np.full(len(data), weights, dtype=complex)
             if np.iscomplexobj(weights): # in lmfit.model they are using "if weights.dtype is complex" but it returns False for complex128 type
@@ -147,7 +147,15 @@ class PolarWeightModel(lmfit.model.Model):
                 # real weights but complex data
                 weights = weights.astype(complex).ravel().view(float)
             diff *= weights
+        else:
+            diff = diff.ravel().view(float)
         return diff
+    
+    def fit(self, data=None, params=None, weights=None, method=None, nan_policy=None, **kwargs):
+        if weights is not None:
+            if np.isscalar(weights):
+                weights = np.full(data.shape, weights) # for nan_policy = 'omit', weights should be numpy array to mask the data
+        return super().fit(data=data, params=params, weights=weights, method=method, nan_policy=nan_policy, **kwargs)
 
 class ResonatorReflectionModel(PolarWeightModel):
     def __init__(self, independent_vars=['omega'], prefix='', nan_policy='raise', reflection_type='normal', **kwargs):
