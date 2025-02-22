@@ -151,11 +151,11 @@ class PolarWeightModel(lmfit.model.Model):
             diff = diff.ravel().view(float)
         return diff
     
-    def fit(self, data=None, params=None, weights=None, method=None, nan_policy=None, **kwargs):
+    def fit(self, data, params=None, weights=None, **kwargs):
         if weights is not None:
             if np.isscalar(weights):
                 weights = np.full(data.shape, weights) # for nan_policy = 'omit', weights should be numpy array to mask the data
-        return super().fit(data=data, params=params, weights=weights, method=method, nan_policy=nan_policy, **kwargs)
+        return super().fit(data=data, params=params, weights=weights, **kwargs)
 
 class ResonatorReflectionModel(PolarWeightModel):
     def __init__(self, independent_vars=['omega'], prefix='', nan_policy='raise', reflection_type='normal', **kwargs):
