@@ -177,7 +177,7 @@ class ResonatorReflectionModel(PolarWeightModel):
         self.set_param_hint('a', min=0)
         self.set_param_hint('reflection_factor', value=self.reflection_factor, vary=False)
         
-    def guess(self, cplx, omega, smoothing_width=10, fix_electrical_delay=False, electrical_delay_estimation="default", **kwargs):
+    def guess(self, cplx, omega, smoothing_width=None, fix_electrical_delay=False, electrical_delay_estimation="default", **kwargs):
         pars = self.make_params()
         
         # estimate electrical delay
@@ -203,7 +203,10 @@ class ResonatorReflectionModel(PolarWeightModel):
         
         # derivative-based guess
         omega_mid = middle_points(omega)
-        cplx_lp = smoothen(cplx_c, smoothing_width=smoothing_width)
+        if smoothing_width is None:
+            cplx_lp = cplx_c
+        else:
+            cplx_lp = smoothen(cplx_c, smoothing_width=smoothing_width)
         s_lorentz = np.abs(derivative(cplx_lp, omega)) # this derivative should be Lorentzian if electrical delay is well calibrated
 
         lmodel = Lorentzian_plus_ConstantModel()
