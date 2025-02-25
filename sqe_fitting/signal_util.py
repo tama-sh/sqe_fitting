@@ -285,7 +285,10 @@ def guess_linewidth_from_peak(freq, data, r=2):
     
     # redefine r parameter
     r = ptp/(data[idx_c]-0.5*(data[idx_l-1]+data[idx_r+1]))
-    return np.sqrt(r-1)*(freq[idx_r+1] - freq[idx_l-1])/2
+    if r <= 1:
+        return freq[-1] - freq[0]
+    else:
+        return np.sqrt(r-1)*(freq[idx_r+1] - freq[idx_l-1])/2
 
 def estimate_phase_offset(freq1, freq2, cplx1, cplx2):
     idx1, idx2 = intersect_indices(freq1, freq2)
