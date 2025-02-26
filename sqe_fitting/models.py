@@ -8,10 +8,11 @@ from lmfit.models import (
     LorentzianModel,
     ExponentialModel,
     ConstantModel,
+    ComplexConstantModel,
     update_param_vals
 )
 
-from .util import percentile_range_data
+from .util import percentile_range_data, percentile_range_indices
 from .signal_util import middle_points, derivative, smoothen, find_peaks, guess_peak_or_dip, guess_linewidth_from_peak
 from .electrical_delay_fitter import (
     estimate_electrical_delay_resonator,
@@ -24,6 +25,9 @@ import scipy.signal as scisig
 # Models
 def damped_oscillation(x, amplitude, decay, frequency, phase):
     return amplitude*np.exp(-x/decay)*np.cos(2*np.pi*frequency*x + phase)
+
+def complex_damped_rotation(x, amplitude, decay, frequency, phase):
+    return amplitude*np.exp(-x/decay)*np.exp(1j*(2*np.pi*frequency*x + phase))
 
 def electrical_delay(omega, tau, theta):
     """Frequency-dependent phase caused by electrical delay
@@ -90,6 +94,43 @@ class DampedOscillationModel(lmfit.model.Model):
         # estimate parameters
         # amplitude = 2*np.abs(peak_amp)*sigma  # factor 2 because of cos(omega*t) = (1/2)*(exp(omega*t)+exp(-omega*t))
         amplitude = 0.5*np.ptp(data)
+        frequency = peak_freq
+        phase = np.angle(peak_amp*np.exp(-1j*2*np.pi*frequency*x[0]))
+        decay = 1/sigma
+        
+        pars = self.make_params()
+        pars['amplitude'].set(value=amplitude)
+        pars['decay'].set(value=decay)
+        pars['frequency'].set(value=frequency)
+        pars['phase'].set(value=phase)
+        
+        return pars
+
+class ComplexDampedRotationModel(lmfit.model.Model):
+    def __init__(self, independent_vars=['x'], prefix='', nan_policy='raise', **kwargs):
+        kwargs.update({'prefix': prefix, 'nan_policy': nan_policy,
+                       'independent_vars': independent_vars})
+        super().__init__(complex_damped_rotation, **kwargs)
+        self._set_paramhints_prefix()
+    
+    def _set_paramhints_prefix(self):
+        self.set_param_hint('amplitude', min=0)
+        self.set_param_hint('phase', min=-2*np.pi-1e-5, max=2*np.pi+1e-5) 
+        
+    def guess(self, data, x, **kwargs):
+        N = len(data)
+        data_no_dc = data - np.mean(data)  # need to remove dc peak from fft
+        fft_data = np.fft.fftshift(np.fft.fft(data_no_dc))
+        fft_freq = np.fft.fftshift(np.fft.fftfreq(N, x[1]-x[0]))
+        
+        peak_idx = np.argmax(np.abs(fft_data))
+        peak_amp = fft_data[peak_idx]
+        peak_freq = fft_freq[peak_idx]
+        sigma = guess_linewidth_from_peak(2*np.pi*fft_freq, abs(fft_data)**2) # estimate decay rate from linewidth of fft peak
+        
+        # estimate parameters
+        # amplitude = 2*np.abs(peak_amp)*sigma  # factor 2 because of cos(omega*t) = (1/2)*(exp(omega*t)+exp(-omega*t))
+        amplitude = np.max(np.abs(data))
         frequency = peak_freq
         phase = np.angle(peak_amp*np.exp(-1j*2*np.pi*frequency*x[0]))
         decay = 1/sigma
@@ -545,5 +586,18 @@ class DampedOscillation_plus_ConstantModel(lmfit.model.CompositeModel):
         
         params = self.left.guess(data-c_init, x=x)
         params.add('c', value=c_init)
+        return params
+
+class ComplexDampedRotation_plus_ConstantModel(lmfit.model.CompositeModel):
+    def __init__(self, independent_vars=['x'], prefix='', nan_policy='raise', **kwargs):
+        kwargs.update({'prefix': prefix, 'nan_policy': nan_policy, 'independent_vars': independent_vars})
+        super().__init__(ComplexDampedRotationModel(**kwargs), ComplexConstantModel(**kwargs), operator.add)
+    
+    def guess(self, data, x, **kwargs):
+        c_init = np.mean(data[percentile_range_indices(abs(data), (0.25, 0.75))])
+        
+        params = self.left.guess(data-c_init, x=x)
+        params.add('re', value=c_init.real)
+        params.add('im', value=c_init.imag)
         return params
     
